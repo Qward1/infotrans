@@ -29,10 +29,17 @@ class AppConfig(BaseModel):
     secret_key: str = "insecure-dev-secret-change-me"
     timezone: str = "Europe/Moscow"
     debug: bool = True
-    # Префикс пути, если приложение развёрнуто за reverse-proxy под под-путём
-    # (например, "/jnserver/1120/application"). Пусто → приложение в корне.
-    # Заголовок X-Forwarded-Prefix от прокси имеет приоритет над этим значением.
+    # ASGI root_path, передаётся в FastAPI(root_path=...). Задавать ТОЛЬКО если
+    # прокси сохраняет префикс в пути и выставляет scope["root_path"] (стандартный
+    # ASGI). Если прокси СРЕЗАЕТ префикс и форвардит чистые пути (наш случай) —
+    # оставить "", иначе ломается монтирование StaticFiles (пути вида /static/...).
     root_path: str = ""
+    # Внешний префикс пути для построения ссылок/редиректов/статики в HTML
+    # (например, "/jnserver/1120/application"). Нужен, когда прокси срезает
+    # префикс: приложение внутри работает на чистых путях, но в браузер ссылки
+    # должны уходить С префиксом. Приоритет ниже, чем X-Forwarded-Prefix и
+    # scope["root_path"]. См. app/core/urls.py.
+    base_path: str = ""
 
 
 class DatabaseConfig(BaseModel):

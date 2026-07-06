@@ -8,7 +8,8 @@
 Источник префикса (по приоритету):
 1. заголовок ``X-Forwarded-Prefix`` от прокси;
 2. ``scope['root_path']`` (если задан через uvicorn ``--root-path`` или FastAPI);
-3. ``app.root_path`` из YAML-конфига.
+3. ``app.base_path`` из YAML-конфига (прокси срезает префикс, а ссылки нужны с ним);
+4. ``app.root_path`` из YAML-конфига (обратная совместимость).
 """
 from __future__ import annotations
 
@@ -26,7 +27,8 @@ def base_path(request: Request) -> str:
     root = request.scope.get("root_path") or ""
     if root:
         return root.rstrip("/")
-    return (get_settings().app.root_path or "").rstrip("/")
+    app_cfg = get_settings().app
+    return (app_cfg.base_path or app_cfg.root_path or "").rstrip("/")
 
 
 def local_redirect(request: Request, path: str, status_code: int = 303) -> RedirectResponse:
