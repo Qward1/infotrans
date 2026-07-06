@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}{{ app_name }}{% endblock %}</title>
+  <link rel="stylesheet" href="/static/css/app.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%97%93%EF%B8%8F%3C/text%3E%3C/svg%3E" />
+  <script>
+    // Применяем тему до отрисовки, чтобы не было «мигания».
+    (function () {
+      var t = localStorage.getItem("smartcal-theme") || "light";
+      document.documentElement.setAttribute("data-theme", t);
+    })();
+  </script>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar glass">
+      <div class="brand">
+        <span class="logo">🗓️</span>
+        <div>
+          {{ app_name }}
+          <small>встречи · поездки · ассистент</small>
+        </div>
+      </div>
+
+      <nav class="nav">
+        <div class="nav-section">Рабочее место</div>
+        <a href="/dashboard" class="{{ 'active' if active == 'dashboard' }}"><span class="ic">🏠</span> Дашборд</a>
+        <a href="/calendar" class="{{ 'active' if active == 'calendar' }}"><span class="ic">📆</span> Календарь</a>
+        <a href="/chat" class="{{ 'active' if active == 'chat' }}"><span class="ic">💬</span> Ассистент</a>
+
+        <div class="nav-section">Инструменты</div>
+        <a href="/documents" class="{{ 'active' if active == 'documents' }}"><span class="ic">📄</span> Документы</a>
+        <a href="/travel" class="{{ 'active' if active == 'travel' }}"><span class="ic">🎫</span> Билеты</a>
+        <a href="/notifications" class="{{ 'active' if active == 'notifications' }}"><span class="ic">🔔</span> Уведомления</a>
+
+        {% if current_user and current_user.is_admin %}
+        <div class="nav-section">Администрирование</div>
+        <a href="/admin/users" class="{{ 'active' if active == 'admin_users' }}"><span class="ic">👥</span> Пользователи</a>
+        <a href="/admin/stats" class="{{ 'active' if active == 'admin_stats' }}"><span class="ic">📊</span> Статистика</a>
+        {% endif %}
+
+        <div class="nav-section">Система</div>
+        <a href="/settings" class="{{ 'active' if active == 'settings' }}"><span class="ic">⚙️</span> Настройки</a>
+      </nav>
+
+      <div class="sidebar-footer">
+        {% if current_user %}
+        <div class="user-card">
+          <div class="avatar">{{ (current_user.full_name or current_user.email)[0] | upper }}</div>
+          <div class="meta">
+            <div class="name">{{ current_user.full_name or current_user.email }}</div>
+            <div class="role">
+              {% if current_user.is_admin %}<span class="badge badge-admin">admin</span>{% else %}<span class="badge badge-user">user</span>{% endif %}
+            </div>
+          </div>
+        </div>
+        <a href="/logout" class="btn ghost small" style="width:100%; justify-content:center; margin-top:8px;">Выйти</a>
+        {% endif %}
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar glass">
+        <div class="flex items-center gap-12">
+          <button class="btn icon menu-btn" onclick="toggleSidebar()" aria-label="Меню">☰</button>
+          <div>
+            <h1>{% block page_title %}{% endblock %}</h1>
+            <div class="subtitle">{% block page_subtitle %}{% endblock %}</div>
+          </div>
+        </div>
+        <div class="topbar-actions">
+          {% block topbar_actions %}{% endblock %}
+          {% if current_user %}
+          <div class="notif-wrap">
+            <button id="notif-btn" class="btn icon theme-toggle" aria-label="Уведомления">🔔<span class="notif-badge" id="notif-badge" style="display:none">0</span></button>
+            <div class="notif-panel glass" id="notif-panel">
+              <div class="flex between items-center" style="margin-bottom:8px;">
+                <strong>Уведомления</strong>
+                <button class="btn small ghost" id="notif-read">Прочитано</button>
+              </div>
+              <div id="notif-list"><div class="a-muted">Загрузка…</div></div>
+            </div>
+          </div>
+          {% endif %}
+          <button id="theme-toggle" class="btn icon theme-toggle" onclick="toggleTheme()" aria-label="Сменить тему">🌙</button>
+        </div>
+      </header>
+
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+
+  <div class="toast-wrap"></div>
+  <script src="/static/js/app.js" defer></script>
+  {% block extra_js %}{% endblock %}
+</body>
+</html>

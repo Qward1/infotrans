@@ -1,0 +1,141 @@
+# ============================================================================
+# Dify advanced-chat: travel_assistant
+# Нормализует запрос на поездку → параметры для поиска билетов + объяснение.
+# JSON совместим с app/services/assistant/schemas.py::TravelData (+ reply).
+# ============================================================================
+app:
+  description: 'Ассистент поездок: разбирает запрос «из X в Y на дату», готовит параметры поиска билетов и объясняет варианты.'
+  icon: 🎫
+  icon_background: '#EAF1FF'
+  mode: advanced-chat
+  name: Travel Assistant
+  use_icon_as_answer_icon: false
+dependencies:
+- current_identifier: null
+  type: package
+  value:
+    plugin_unique_identifier: langgenius/openai_api_compatible:0.0.35@bb81bce2b7e04af8178eb2fb36cc6e1eb75aadbc98d31bc2c858b4648ba63c26
+    version: null
+kind: app
+version: 0.5.0
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    file_upload: {enabled: false}
+    opening_statement: 'Куда и когда едем? Например: «из Москвы в Казань 20 августа, поездом, недорого».'
+    retriever_resource: {enabled: false}
+    sensitive_word_avoidance: {enabled: false}
+    speech_to_text: {enabled: false}
+    suggested_questions:
+    - Билеты из Москвы в Сочи на 25 августа самолётом
+    - Как добраться из Санкт-Петербурга в Казань в выходные
+    suggested_questions_after_answer: {enabled: false}
+    text_to_speech: {enabled: false, language: '', voice: ''}
+  graph:
+    edges:
+    - data: {isInIteration: false, sourceType: start, targetType: llm}
+      id: start-travel
+      source: start_node
+      sourceHandle: source
+      target: travel_llm
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data: {isInIteration: false, sourceType: llm, targetType: answer}
+      id: travel-answer
+      source: travel_llm
+      sourceHandle: source
+      target: answer_node
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    nodes:
+    - data:
+        desc: 'Запрос поездки (sys.query). user_tz — часовой пояс для дат.'
+        selected: false
+        title: Start
+        type: start
+        variables:
+        - {label: user_tz, variable: user_tz, type: text-input, required: false,
+           max_length: 48, default: 'Europe/Moscow', hint: 'Часовой пояс.',
+           options: [], allowed_file_extensions: [], allowed_file_types: [],
+           allowed_file_upload_methods: [], placeholder: ''}
+      height: 116
+      id: start_node
+      position: {x: -360, y: 260}
+      positionAbsolute: {x: -360, y: 260}
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        context: {enabled: false, variable_selector: []}
+        desc: 'Извлекает параметры поездки и формирует пояснение.'
+        model:
+          completion_params: {temperature: 0.2}
+          mode: chat
+          name: qwen3-32b-fp8-v2
+          provider: langgenius/openai_api_compatible/openai_api_compatible
+        prompt_template:
+        - id: sys-travel
+          role: system
+          text: |
+            Ты — travel-ассистент. Из запроса извлеки параметры поездки для поиска билетов.
+            Ответ — строго JSON по схеме, без markdown.
+
+            Правила:
+            - origin_city / destination_city — города в именительном падеже.
+            - departure_date / return_date — ISO YYYY-MM-DD (в часовом поясе {{#start_node.user_tz#}}); если не названо — null.
+            - transport_type ∈ {flight, train, any}.
+            - preferences — из набора {cheapest, fastest, direct} по формулировкам «дешевле/быстрее/без пересадок».
+            - budget — число в рублях, если названо.
+            - reply — короткое деловое пояснение, что будем искать (реальные варианты подставит backend).
+        - id: usr-travel
+          role: user
+          text: '{{#sys.query#}}'
+        selected: false
+        structured_output_enabled: true
+        structured_output:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [reply, origin_city, destination_city, departure_date, return_date, transport_type, preferences, budget]
+            properties:
+              reply: {type: string}
+              origin_city: {type: string}
+              destination_city: {type: string}
+              departure_date: {type: string, description: 'YYYY-MM-DD или пусто'}
+              return_date: {type: string, description: 'YYYY-MM-DD или пусто'}
+              transport_type: {type: string, enum: [flight, train, any]}
+              preferences: {type: array, items: {type: string, enum: [cheapest, fastest, direct]}}
+              budget: {type: number}
+        title: Travel (LLM)
+        type: llm
+      height: 98
+      id: travel_llm
+      position: {x: 20, y: 260}
+      positionAbsolute: {x: 20, y: 260}
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        answer: '{{#travel_llm.structured_output#}}'
+        desc: 'JSON с параметрами поездки.'
+        selected: false
+        title: Ответ (поездка)
+        type: answer
+        variables: []
+      height: 106
+      id: answer_node
+      position: {x: 400, y: 260}
+      positionAbsolute: {x: 400, y: 260}
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    viewport: {x: 360, y: 120, zoom: 0.8}

@@ -1,0 +1,1258 @@
+app:
+  description: 'Ассистент господдержки СВО. Детерминированный роутер по channel:
+    max → база знаний MAX; sentiment → тональность обращения; summary → суть кратко;
+    confidence → оценка уверенности черновика; пусто → задание 1 (Excel/справка).'
+  icon: 🤖
+  icon_background: '#FFEAD5'
+  mode: advanced-chat
+  name: Господдержка СВО
+  use_icon_as_answer_icon: false
+dependencies:
+- current_identifier: null
+  type: package
+  value:
+    plugin_unique_identifier: scibox/document-generator:0.0.1@dd7c5e14746b852f9a4c319bee5bf633135d35657a69415289652216e39b7865
+    version: null
+- current_identifier: null
+  type: package
+  value:
+    plugin_unique_identifier: langgenius/openai_api_compatible:0.0.35@bb81bce2b7e04af8178eb2fb36cc6e1eb75aadbc98d31bc2c858b4648ba63c26
+    version: null
+kind: app
+version: 0.5.0
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    file_upload:
+      allowed_file_extensions:
+      - .xlsx
+      - .xlsm
+      - .docx
+      allowed_file_types:
+      - document
+      allowed_file_upload_methods:
+      - remote_url
+      - local_file
+      enabled: true
+      fileUploadConfig:
+        audio_file_size_limit: 1024
+        batch_count_limit: 25
+        file_size_limit: 1024
+        image_file_size_limit: 1024
+        video_file_size_limit: 1024
+        workflow_file_upload_limit: 1024
+      image:
+        enabled: false
+        number_limits: 3
+        transfer_methods:
+        - local_file
+        - remote_url
+      number_limits: 5
+    opening_statement: ''
+    retriever_resource:
+      enabled: true
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions: []
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+  graph:
+    edges:
+    # Start → Роутер
+    - data: {isInIteration: false, isInLoop: false, sourceType: start, targetType: if-else}
+      id: start_node-source-router-target
+      source: start_node
+      sourceHandle: source
+      target: router
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    # Роутер true (channel=max) → поиск в базе знаний MAX
+    - data: {isInIteration: false, isInLoop: false, sourceType: if-else, targetType: knowledge-retrieval}
+      id: router-true-max_kb-target
+      source: router
+      sourceHandle: 'true'
+      target: max_kb
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data: {isInIteration: false, isInLoop: false, sourceType: knowledge-retrieval, targetType: llm}
+      id: max_kb-source-max_llm-target
+      source: max_kb
+      sourceHandle: source
+      target: max_llm
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data: {isInIteration: false, isInLoop: false, sourceType: llm, targetType: code}
+      id: max_llm-source-max_pack-target
+      source: max_llm
+      sourceHandle: source
+      target: max_pack
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data: {isInIteration: false, isInLoop: false, sourceType: code, targetType: answer}
+      id: max_pack-source-max_answer-target
+      source: max_pack
+      sourceHandle: source
+      target: max_answer
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    # Роутер case_sentiment → ветка «Тональность»
+    - data: {isInIteration: false, isInLoop: false, sourceType: if-else, targetType: llm}
+      id: router-sentiment-senti_llm-target
+      source: router
+      sourceHandle: case_sentiment
+      target: senti_llm
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data: {isInIteration: false, isInLoop: false, sourceType: llm, targetType: code}
+      id: senti_llm-source-senti_pack-target
+      source: senti_llm
+      sourceHandle: source
+      target: senti_pack
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data: {isInIteration: false, isInLoop: false, sourceType: code, targetType: answer}
+      id: senti_pack-source-senti_answer-target
+      source: senti_pack
+      sourceHandle: source
+      target: senti_answer
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    # Роутер case_summary → ветка «Суть кратко»
+    - data: {isInIteration: false, isInLoop: false, sourceType: if-else, targetType: llm}
+      id: router-summary-sum_llm-target
+      source: router
+      sourceHandle: case_summary
+      target: sum_llm
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data: {isInIteration: false, isInLoop: false, sourceType: llm, targetType: code}
+      id: sum_llm-source-sum_pack-target
+      source: sum_llm
+      sourceHandle: source
+      target: sum_pack
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data: {isInIteration: false, isInLoop: false, sourceType: code, targetType: answer}
+      id: sum_pack-source-sum_answer-target
+      source: sum_pack
+      sourceHandle: source
+      target: sum_answer
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    # Роутер case_confidence → ветка «Уверенность ИИ»
+    - data: {isInIteration: false, isInLoop: false, sourceType: if-else, targetType: llm}
+      id: router-confidence-conf_llm-target
+      source: router
+      sourceHandle: case_confidence
+      target: conf_llm
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data: {isInIteration: false, isInLoop: false, sourceType: llm, targetType: code}
+      id: conf_llm-source-conf_pack-target
+      source: conf_llm
+      sourceHandle: source
+      target: conf_pack
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data: {isInIteration: false, isInLoop: false, sourceType: code, targetType: answer}
+      id: conf_pack-source-conf_answer-target
+      source: conf_pack
+      sourceHandle: source
+      target: conf_answer
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    # Роутер false → задание 1: HTTP извлечение Excel
+    - data: {isInIteration: false, isInLoop: false, sourceType: if-else, targetType: http-request}
+      id: router-false-http_extract-target
+      source: router
+      sourceHandle: 'false'
+      target: http_extract
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data: {isInIteration: false, isInLoop: false, sourceType: http-request, targetType: code}
+      id: http_extract-source-parse_excel-target
+      source: http_extract
+      sourceHandle: source
+      target: parse_excel
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data: {isInIteration: false, isInLoop: false, sourceType: code, targetType: question-classifier}
+      id: parse_excel-source-classifier-target
+      source: parse_excel
+      sourceHandle: source
+      target: classifier
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    # Классификатор: класс 1 → ответ на вопрос по таблице
+    - data: {isInIteration: false, isInLoop: false, sourceType: question-classifier, targetType: llm}
+      id: classifier-1-llm_qa-target
+      source: classifier
+      sourceHandle: '1'
+      target: llm_qa
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data: {isInIteration: false, isInLoop: false, sourceType: llm, targetType: answer}
+      id: llm_qa-source-answer_qa-target
+      source: llm_qa
+      sourceHandle: source
+      target: answer_qa
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    # Классификатор: класс 2 → создание справки
+    - data: {isInIteration: false, isInLoop: false, sourceType: question-classifier, targetType: llm}
+      id: classifier-2-llm_spravka-target
+      source: classifier
+      sourceHandle: '2'
+      target: llm_spravka
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data: {isInIteration: false, isInLoop: false, sourceType: llm, targetType: code}
+      id: llm_spravka-source-build_docx-target
+      source: llm_spravka
+      sourceHandle: source
+      target: build_docx
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data: {isInIteration: false, isInLoop: false, sourceType: code, targetType: tool}
+      id: build_docx-source-generate_docx-target
+      source: build_docx
+      sourceHandle: source
+      target: generate_docx
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data: {isInIteration: false, isInLoop: false, sourceType: tool, targetType: answer}
+      id: generate_docx-source-answer_spravka-target
+      source: generate_docx
+      sourceHandle: source
+      target: answer_spravka
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    nodes:
+    # ====================== START ======================
+    - data:
+        desc: 'channel=max приходит от MAX-бота; template — DOCX-шаблон справки; сам
+          Excel загружается как файл сообщения (sys.files).'
+        selected: false
+        title: Start
+        type: start
+        variables:
+        - allowed_file_extensions: []
+          allowed_file_types: []
+          allowed_file_upload_methods: []
+          default: ''
+          hint: 'Дискриминатор ветки (точное сравнение). "max" — база знаний MAX;
+            "sentiment" — тональность; "summary" — суть кратко; "confidence" — оценка
+            уверенности; пусто — задание 1 (Excel/справка).'
+          label: channel
+          max_length: 48
+          options: []
+          placeholder: ''
+          required: false
+          type: text-input
+          variable: channel
+        - allowed_file_extensions:
+          - .docx
+          allowed_file_types:
+          - document
+          allowed_file_upload_methods:
+          - local_file
+          - remote_url
+          default: ''
+          hint: 'DOCX-шаблон справки (Spravka_Shablon).'
+          label: Шаблон справки
+          max_length: 48
+          options: []
+          placeholder: ''
+          required: false
+          type: file
+          variable: template
+      height: 140
+      id: start_node
+      position: {x: -400, y: 280}
+      positionAbsolute: {x: -400, y: 280}
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    # ====================== РОУТЕР (изоляция MAX) ======================
+    - data:
+        cases:
+        - case_id: 'true'
+          conditions:
+          - comparison_operator: is
+            id: cond-channel-max
+            value: max
+            varType: string
+            variable_selector:
+            - start_node
+            - channel
+          id: 'true'
+          logical_operator: and
+        - case_id: case_sentiment
+          conditions:
+          - comparison_operator: is
+            id: cond-channel-sentiment
+            value: sentiment
+            varType: string
+            variable_selector:
+            - start_node
+            - channel
+          id: case_sentiment
+          logical_operator: and
+        - case_id: case_summary
+          conditions:
+          - comparison_operator: is
+            id: cond-channel-summary
+            value: summary
+            varType: string
+            variable_selector:
+            - start_node
+            - channel
+          id: case_summary
+          logical_operator: and
+        - case_id: case_confidence
+          conditions:
+          - comparison_operator: is
+            id: cond-channel-confidence
+            value: confidence
+            varType: string
+            variable_selector:
+            - start_node
+            - channel
+          id: case_confidence
+          logical_operator: and
+        desc: 'Детерминированный роутер по точному значению channel: max → база знаний
+          MAX; sentiment → тональность; summary → выжимка; confidence → оценка
+          уверенности; иначе (пусто) → задание 1. Точное сравнение «is» гарантирует
+          выбор ровно одной ветки.'
+        selected: false
+        title: Роутер по channel
+        type: if-else
+      height: 126
+      id: router
+      position: {x: -100, y: 280}
+      positionAbsolute: {x: -100, y: 280}
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    # ====================== ВЕТКА MAX: база знаний ======================
+    - data:
+        dataset_ids:
+        - REPLACE_WITH_KB_DATASET_ID
+        desc: 'База знаний из "Информация для базы знаний.txt". После импорта выберите
+          датасет в этом узле заново.'
+        multiple_retrieval_config:
+          reranking_enable: false
+          reranking_mode: weighted_score
+          score_threshold: 0.3
+          top_k: 5
+          weights:
+            keyword_setting:
+              keyword_weight: 0.3
+            vector_setting:
+              embedding_model_name: bge-m3-v2
+              embedding_provider_name: langgenius/openai_api_compatible/openai_api_compatible
+              vector_weight: 0.7
+            weight_type: customized
+        query_variable_selector:
+        - sys
+        - query
+        retrieval_mode: multiple
+        selected: false
+        title: Поиск в базе знаний (MAX)
+        type: knowledge-retrieval
+      height: 92
+      id: max_kb
+      position: {x: 220, y: 100}
+      positionAbsolute: {x: 220, y: 100}
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        context:
+          enabled: true
+          variable_selector:
+          - max_kb
+          - result
+        desc: ''
+        model:
+          completion_params: {temperature: 0.2}
+          mode: chat
+          name: qwen3-32b-fp8-v2
+          provider: langgenius/openai_api_compatible/openai_api_compatible
+        prompt_template:
+        - id: max-sys
+          role: system
+          text: |
+            Ты — ассистент контакт-центра господдержки участников СВО и их семей. Действуй в два шага. Результат — строго JSON по схеме, без markdown и пояснений.
+
+            ШАГ 1 — КЛАССИФИКАЦИЯ ЗАПРОСА. Сделай это ПЕРВЫМ, до составления ответа. Реши, относится ли запрос к профилю контакт-центра и является ли он осмысленным вопросом.
+            ПО ТЕМЕ (on_topic=true): меры господдержки и соцпомощи участникам СВО, ветеранам и их семьям; выплаты, льготы, компенсации, пособия; статус ветерана/участника боевых действий и удостоверения; медицина, реабилитация, санаторно-курортное лечение, ТСР; трудоустройство, переобучение, образование детей; жильё и ЖКУ; юридическая и психологическая помощь; оформление документов и заявлений; запись на приём; работа самого контакт-центра.
+            НЕ ПО ТЕМЕ (on_topic=false): всё остальное — бытовые и справочные вопросы (как куда-то пройти/доехать, кафе, магазины, погода), развлечения, наука, космос, путешествия, спорт, программирование, общие беседы; а также неадекватные запросы: бессвязный текст, случайный набор символов, брань, оскорбления, спам.
+
+            topic_confidence — твоя уверенность в этом решении (0..1). Для ОЧЕВИДНЫХ случаев ставь 0.9–1.0 — и когда явно по теме, и когда явно НЕ по теме. Значение около 0.5 допустимо только при реальном сомнении; тогда выбирай on_topic=true, чтобы не отсечь живого человека.
+
+            Примеры (вход → on_topic, topic_confidence):
+            - «Какие выплаты положены семье погибшего участника СВО?» → true, 0.98
+            - «Как оформить удостоверение ветерана боевых действий?» → true, 0.97
+            - «Как записаться на приём?» → true, 0.95
+            - «Как дойти до кафе?» → false, 0.97
+            - «Как полететь в космос?» → false, 0.98
+            - «Какая сегодня погода?» → false, 0.97
+            - «сука» → false, 0.95
+            - «asdf qwerty 123» → false, 0.95
+
+            ШАГ 2 — ОТВЕТ. Заполняй answer/found_in_kb/confidence только если on_topic=true. Отвечай ТОЛЬКО на основе контекста базы знаний ниже. Если точного ответа в контексте нет или ты не уверен — found_in_kb=false, низкий confidence, answer="". Если ответ есть в контексте — помести его в answer, found_in_kb=true, confidence ближе к 1.
+            ЕСЛИ on_topic=false — обязательно answer="", found_in_kb=false, confidence=0.
+
+            КАК ПИСАТЬ answer (это важно — ответ читают в мессенджере MAX с телефона):
+            - Пиши ЁМКО и по делу. Дай только то, что реально отвечает на вопрос, без воды, вступлений и повторения вопроса. Идеальная длина — 3–8 коротких строк.
+            - НЕ вываливай текст сплошной простынёй. Разбивай на короткие абзацы (1–2 предложения) с пустой строкой между ними.
+            - Если в ответе есть перечисление (документы, условия, шаги, суммы) — оформляй маркированным списком: каждый пункт с новой строки, начинай с «• ». Для последовательности шагов можно нумеровать «1.», «2.».
+            - Уместно используй 1–3 эмодзи как смысловые маркеры разделов (📋 документы, 💰 выплаты, 📍 куда обращаться, 🕒 сроки), но не перегружай.
+            - НЕ используй markdown-разметку (**, ##, таблицы, ```): MAX показывает её как обычный текст. Только обычный текст, переносы строк, «• » и эмодзи.
+            - В конце, если уместно, короткой строкой подскажи следующий шаг (например: «Могу записать вас на приём — просто скажите.»).
+
+            Контекст базы знаний:
+            {{#context#}}
+        - id: max-user
+          role: user
+          text: 'Вопрос пользователя: {{#sys.query#}}'
+        selected: false
+        structured_output:
+          schema:
+            additionalProperties: false
+            properties:
+              on_topic:
+                description: Заполняй ПЕРВЫМ. true — запрос по теме господдержки СВО,
+                  помощи УСВО и их семьям, получения информации по этим темам; false —
+                  любой другой запрос (бытовой/справочный/развлекательный и т. п.) либо
+                  неадекватный (бессвязный текст, брань, спам).
+                type: boolean
+              topic_confidence:
+                description: Уверенность 0..1 в значении on_topic. Для очевидных случаев
+                  (явно по теме ИЛИ явно не по теме) ставь 0.9–1.0.
+                maximum: 1
+                minimum: 0
+                type: number
+              found_in_kb:
+                description: true только если on_topic=true И в контексте базы знаний есть
+                  точный ответ. Если on_topic=false — всегда false.
+                type: boolean
+              confidence:
+                description: Уверенность 0..1 в ответе из базы знаний. Если on_topic=false
+                  — всегда 0.
+                maximum: 1
+                minimum: 0
+                type: number
+              answer:
+                description: Ответ пользователю на естественном языке (если найден в базе).
+                  Если on_topic=false — пустая строка.
+                type: string
+            required:
+            - on_topic
+            - topic_confidence
+            - found_in_kb
+            - confidence
+            - answer
+            type: object
+        structured_output_enabled: true
+        title: LLM ответ по базе знаний
+        type: llm
+        vision: {enabled: false}
+      height: 90
+      id: max_llm
+      position: {x: 540, y: 100}
+      positionAbsolute: {x: 540, y: 100}
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        code: |-
+          import json
+
+          def _to_bool(v):
+              # structured_output может прислать булево как СТРОКУ ("false"/"true").
+              # bool("false") в Python == True, поэтому парсим строки явно.
+              if isinstance(v, bool):
+                  return v
+              if isinstance(v, str):
+                  return v.strip().lower() in ("true", "1", "yes", "да")
+              if isinstance(v, (int, float)):
+                  return v != 0
+              return bool(v)
+
+          def _to_float(v):
+              try:
+                  return float(v)
+              except Exception:
+                  return 0.0
+
+          def main(answer, found_in_kb, confidence, on_topic, topic_confidence):
+              payload = {
+                  "answer": str(answer or ""),
+                  "found_in_kb": _to_bool(found_in_kb),
+                  "confidence": _to_float(confidence),
+                  "on_topic": _to_bool(on_topic),
+                  "topic_confidence": _to_float(topic_confidence),
+              }
+              return {"json": json.dumps(payload, ensure_ascii=False)}
+        code_language: python3
+        desc: 'Собирает чистый JSON {answer, found_in_kb, confidence, on_topic, topic_confidence} — его парсит микросервис.'
+        outputs:
+          json: {children: null, type: string}
+        selected: false
+        title: Упаковка ответа (JSON)
+        type: code
+        variables:
+        - value_selector: [max_llm, structured_output, answer]
+          value_type: string
+          variable: answer
+        - value_selector: [max_llm, structured_output, found_in_kb]
+          value_type: string
+          variable: found_in_kb
+        - value_selector: [max_llm, structured_output, confidence]
+          value_type: string
+          variable: confidence
+        - value_selector: [max_llm, structured_output, on_topic]
+          value_type: string
+          variable: on_topic
+        - value_selector: [max_llm, structured_output, topic_confidence]
+          value_type: string
+          variable: topic_confidence
+      height: 54
+      id: max_pack
+      position: {x: 860, y: 100}
+      positionAbsolute: {x: 860, y: 100}
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        answer: '{{#max_pack.json#}}'
+        desc: 'Возвращает JSON-строку микросервису MAX-бота.'
+        selected: false
+        title: Ответ (MAX)
+        type: answer
+        variables: []
+      height: 106
+      id: max_answer
+      position: {x: 1180, y: 100}
+      positionAbsolute: {x: 1180, y: 100}
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    # ====================== ВЕТКА: ТОНАЛЬНОСТЬ (channel=sentiment) ======================
+    - data:
+        context: {enabled: false, variable_selector: []}
+        desc: 'Классифицирует эмоциональный окрас обращения. Возвращает только key и
+          confidence — label/emoji/tone детерминированно достроит код-узел.'
+        model:
+          completion_params: {temperature: 0.1}
+          mode: chat
+          name: qwen3-32b-fp8-v2
+          provider: langgenius/openai_api_compatible/openai_api_compatible
+        prompt_template:
+        - id: senti-sys
+          role: system
+          text: |
+            Ты определяешь эмоциональный окрас обращения гражданина в контакт-центр господдержки участников СВО.
+            Верни строго JSON по схеме с полем key — одно из четырёх значений:
+            - positive — благодарность, удовлетворение, тёплые слова;
+            - neutral — обычный информационный запрос без выраженных эмоций;
+            - anxious — тревога, страх, отчаяние, горе, просьба о срочной помощи;
+            - aggressive — возмущение, угрозы, оскорбления, требования с давлением, жалобы.
+            Поле confidence — твоя уверенность в классификации 0..1.
+            При сомнении между neutral и эмоцией выбирай эмоцию только при явных маркерах.
+        - id: senti-user
+          role: user
+          text: 'Обращение гражданина: {{#sys.query#}}'
+        selected: false
+        structured_output:
+          schema:
+            additionalProperties: false
+            properties:
+              key:
+                description: 'Тональность: positive | neutral | anxious | aggressive.'
+                enum: [positive, neutral, anxious, aggressive]
+                type: string
+              confidence:
+                description: Уверенность 0..1 в классификации.
+                maximum: 1
+                minimum: 0
+                type: number
+            required: [key, confidence]
+            type: object
+        structured_output_enabled: true
+        title: LLM тональность
+        type: llm
+        vision: {enabled: false}
+      height: 90
+      id: senti_llm
+      position: {x: 540, y: -120}
+      positionAbsolute: {x: 540, y: -120}
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        code: |-
+          import json
+
+          def main(key, confidence):
+              table = {
+                  "positive": ("Позитивное", "\U0001F60A", "ok"),
+                  "neutral": ("Нейтральное", "\U0001F610", "info"),
+                  "anxious": ("Тревожное", "\U0001F61F", "warn"),
+                  "aggressive": ("Напряжённое", "\U0001F620", "danger"),
+              }
+              k = str(key or "neutral").strip().lower()
+              if k not in table:
+                  k = "neutral"
+              label, emoji, tone = table[k]
+              try:
+                  conf = float(confidence)
+              except Exception:
+                  conf = 0.0
+              payload = {"key": k, "label": label, "emoji": emoji, "tone": tone, "confidence": conf}
+              return {"json": json.dumps(payload, ensure_ascii=False)}
+        code_language: python3
+        desc: 'Детерминированно достраивает label/emoji/tone по key. Формат совпадает
+          с insight.analyze_sentiment в микросервисе.'
+        outputs:
+          json: {children: null, type: string}
+        selected: false
+        title: Упаковка тональности (JSON)
+        type: code
+        variables:
+        - value_selector: [senti_llm, structured_output, key]
+          value_type: string
+          variable: key
+        - value_selector: [senti_llm, structured_output, confidence]
+          value_type: string
+          variable: confidence
+      height: 54
+      id: senti_pack
+      position: {x: 860, y: -120}
+      positionAbsolute: {x: 860, y: -120}
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        answer: '{{#senti_pack.json#}}'
+        desc: 'JSON {key,label,emoji,tone,confidence}.'
+        selected: false
+        title: Ответ (тональность)
+        type: answer
+        variables: []
+      height: 106
+      id: senti_answer
+      position: {x: 1180, y: -120}
+      positionAbsolute: {x: 1180, y: -120}
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    # ====================== ВЕТКА: СУТЬ КРАТКО (channel=summary) ======================
+    - data:
+        context: {enabled: false, variable_selector: []}
+        desc: 'Сжимает длинное обращение в одну строку.'
+        model:
+          completion_params: {temperature: 0.2}
+          mode: chat
+          name: qwen3-32b-fp8-v2
+          provider: langgenius/openai_api_compatible/openai_api_compatible
+        prompt_template:
+        - id: sum-sys
+          role: system
+          text: |
+            Ты делаешь короткую выжимку обращения гражданина для оператора.
+            Верни строго JSON с полем summary — суть обращения одной строкой на русском,
+            до 90 символов, по существу, без приветствий, без воды и без точки в конце.
+            Сформулируй как тему запроса (что человеку нужно).
+        - id: sum-user
+          role: user
+          text: 'Обращение гражданина: {{#sys.query#}}'
+        selected: false
+        structured_output:
+          schema:
+            additionalProperties: false
+            properties:
+              summary:
+                description: Суть обращения одной строкой (до 90 символов).
+                type: string
+            required: [summary]
+            type: object
+        structured_output_enabled: true
+        title: LLM выжимка
+        type: llm
+        vision: {enabled: false}
+      height: 90
+      id: sum_llm
+      position: {x: 540, y: -300}
+      positionAbsolute: {x: 540, y: -300}
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        code: |-
+          import json
+
+          def main(summary):
+              s = " ".join(str(summary or "").split())
+              if len(s) > 90:
+                  s = s[:90].rsplit(" ", 1)[0].rstrip(",.;:—- ") + "…"
+              return {"json": json.dumps({"summary": s}, ensure_ascii=False)}
+        code_language: python3
+        desc: 'Нормализует выжимку в одну строку ≤90 символов. Формат совпадает с
+          insight.summarize в микросервисе.'
+        outputs:
+          json: {children: null, type: string}
+        selected: false
+        title: Упаковка выжимки (JSON)
+        type: code
+        variables:
+        - value_selector: [sum_llm, structured_output, summary]
+          value_type: string
+          variable: summary
+      height: 54
+      id: sum_pack
+      position: {x: 860, y: -300}
+      positionAbsolute: {x: 860, y: -300}
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        answer: '{{#sum_pack.json#}}'
+        desc: 'JSON {summary}.'
+        selected: false
+        title: Ответ (выжимка)
+        type: answer
+        variables: []
+      height: 106
+      id: sum_answer
+      position: {x: 1180, y: -300}
+      positionAbsolute: {x: 1180, y: -300}
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    # ====================== ВЕТКА: УВЕРЕННОСТЬ ИИ (channel=confidence) ======================
+    - data:
+        context: {enabled: false, variable_selector: []}
+        desc: 'Оценивает уверенность в черновике ответа относительно вопроса. На вход
+          подаётся вопрос + черновик ответа в sys.query.'
+        model:
+          completion_params: {temperature: 0.1}
+          mode: chat
+          name: qwen3-32b-fp8-v2
+          provider: langgenius/openai_api_compatible/openai_api_compatible
+        prompt_template:
+        - id: conf-sys
+          role: system
+          text: |
+            Ты оцениваешь качество черновика официального ответа гражданину.
+            На входе — вопрос гражданина и предложенный черновик ответа.
+            Оцени, насколько черновик точен, полон и обоснован относительно вопроса.
+            Верни строго JSON: confidence (0..1) и rationale (краткое обоснование на русском, 1 фраза).
+            Низкий confidence — если ответ общий, уклончивый или не отвечает на вопрос.
+        - id: conf-user
+          role: user
+          text: |
+            Вопрос и черновик ответа:
+            {{#sys.query#}}
+        selected: false
+        structured_output:
+          schema:
+            additionalProperties: false
+            properties:
+              confidence:
+                description: Уверенность в точности черновика 0..1.
+                maximum: 1
+                minimum: 0
+                type: number
+              rationale:
+                description: Краткое обоснование оценки.
+                type: string
+            required: [confidence, rationale]
+            type: object
+        structured_output_enabled: true
+        title: LLM уверенность
+        type: llm
+        vision: {enabled: false}
+      height: 90
+      id: conf_llm
+      position: {x: 540, y: -480}
+      positionAbsolute: {x: 540, y: -480}
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        code: |-
+          import json
+
+          def main(confidence, rationale):
+              try:
+                  conf = float(confidence)
+              except Exception:
+                  conf = 0.0
+              conf = max(0.0, min(1.0, conf))
+              if conf >= 0.75:
+                  label = "высокая"
+              elif conf >= 0.5:
+                  label = "средняя"
+              elif conf >= 0.3:
+                  label = "ниже средней"
+              else:
+                  label = "низкая"
+              payload = {"confidence": conf, "label": label, "rationale": str(rationale or "")}
+              return {"json": json.dumps(payload, ensure_ascii=False)}
+        code_language: python3
+        desc: 'Нормализует confidence в 0..1 и добавляет текстовую метку. Формат совпадает
+          с draft confidence в микросервисе.'
+        outputs:
+          json: {children: null, type: string}
+        selected: false
+        title: Упаковка уверенности (JSON)
+        type: code
+        variables:
+        - value_selector: [conf_llm, structured_output, confidence]
+          value_type: string
+          variable: confidence
+        - value_selector: [conf_llm, structured_output, rationale]
+          value_type: string
+          variable: rationale
+      height: 54
+      id: conf_pack
+      position: {x: 860, y: -480}
+      positionAbsolute: {x: 860, y: -480}
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        answer: '{{#conf_pack.json#}}'
+        desc: 'JSON {confidence,label,rationale}.'
+        selected: false
+        title: Ответ (уверенность)
+        type: answer
+        variables: []
+      height: 106
+      id: conf_answer
+      position: {x: 1180, y: -480}
+      positionAbsolute: {x: 1180, y: -480}
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    # ====================== ЗАДАНИЕ 1: HTTP извлечение Excel ======================
+    - data:
+        authorization: {config: null, type: no-auth}
+        body:
+          data:
+          - id: file-field
+            key: file
+            type: file
+            file:
+            - sys
+            - files
+          type: form-data
+        desc: 'POST файла Excel в микросервис. Если ваша версия Dify не кладёт файл в
+          form-data — переключите тип тела на JSON {"file_url": ...} или binary: микросервис
+          принимает все три способа.'
+        headers: X-Api-Key:112233
+        method: post
+        params: ''
+        retry_config: {max_retries: 3, retry_enabled: true, retry_interval: 100}
+        selected: false
+        ssl_verify: true
+        timeout: {max_connect_timeout: 0, max_read_timeout: 0, max_write_timeout: 0}
+        title: HTTP извлечение Excel
+        type: http-request
+        url: https://CHANGE-ME-microservice/excel/extract
+        variables: []
+      height: 168
+      id: http_extract
+      position: {x: 220, y: 460}
+      positionAbsolute: {x: 220, y: 460}
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        code: |-
+          import json
+
+          def main(body):
+              data = body
+              if isinstance(body, str):
+                  try:
+                      data = json.loads(body)
+                  except Exception:
+                      return {"excel_text": body, "truncated": False}
+              if not isinstance(data, dict):
+                  return {"excel_text": str(body), "truncated": False}
+              return {
+                  "excel_text": str(data.get("text", "")),
+                  "truncated": bool(data.get("truncated", False)),
+              }
+        code_language: python3
+        desc: 'Достаёт поле text из ответа микросервиса.'
+        outputs:
+          excel_text: {children: null, type: string}
+          truncated: {children: null, type: boolean}
+        selected: false
+        title: Разбор ответа микросервиса
+        type: code
+        variables:
+        - value_selector: [http_extract, body]
+          value_type: string
+          variable: body
+      height: 54
+      id: parse_excel
+      position: {x: 540, y: 460}
+      positionAbsolute: {x: 540, y: 460}
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        classes:
+        - id: '1'
+          name: Вопрос по таблице
+        - id: '2'
+          name: Создание справки
+        desc: ''
+        instruction: 'Класс "Создание справки" выбирай, если пользователь просит сделать/сформировать/выдать
+          справку, документ, выписку по данным таблицы. Класс "Вопрос по таблице" —
+          во всех остальных случаях, когда пользователь просто задаёт вопрос по данным.'
+        instructions: ''
+        model:
+          completion_params: {temperature: 0.2}
+          mode: chat
+          name: qwen3-32b-fp8-v2
+          provider: langgenius/openai_api_compatible/openai_api_compatible
+        query_variable_selector:
+        - sys
+        - query
+        selected: false
+        title: Классификатор запроса
+        type: question-classifier
+        vision: {enabled: false}
+      height: 168
+      id: classifier
+      position: {x: 860, y: 460}
+      positionAbsolute: {x: 860, y: 460}
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    # ---- Класс 1: ответ на вопрос по таблице ----
+    - data:
+        context: {enabled: false, variable_selector: []}
+        desc: ''
+        model:
+          completion_params: {temperature: 0.3}
+          mode: chat
+          name: qwen3-32b-fp8-v2
+          provider: langgenius/openai_api_compatible/openai_api_compatible
+        prompt_template:
+        - id: qa-sys
+          role: system
+          text: "Ты отвечаешь на вопросы по таблице с данными об участниках СВО и их\
+            \ семьях.\n\nИспользуй ТОЛЬКО приведённые данные таблицы. Если ответа в данных\
+            \ нет — честно скажи об этом. При подсчётах будь точен. Отвечай кратко и\
+            \ по делу, на русском."
+        - id: qa-user
+          role: user
+          text: "Данные таблицы (легенда столбцов + записи):\n{{#parse_excel.excel_text#}}\n\
+            \nВопрос: {{#sys.query#}}"
+        selected: false
+        title: LLM ответ по таблице
+        type: llm
+        vision: {enabled: false}
+      height: 90
+      id: llm_qa
+      position: {x: 1180, y: 360}
+      positionAbsolute: {x: 1180, y: 360}
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        answer: '{{#llm_qa.text#}}'
+        desc: ''
+        selected: false
+        title: Ответ на вопрос
+        type: answer
+        variables: []
+      height: 106
+      id: answer_qa
+      position: {x: 1500, y: 360}
+      positionAbsolute: {x: 1500, y: 360}
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    # ---- Класс 2: создание справки ----
+    - data:
+        context: {enabled: false, variable_selector: []}
+        desc: ''
+        model:
+          completion_params: {temperature: 0.3}
+          mode: chat
+          name: qwen3-32b-fp8-v2
+          provider: langgenius/openai_api_compatible/openai_api_compatible
+        prompt_template:
+        - id: spr-sys
+          role: system
+          text: "Ты готовишь СОДЕРЖАНИЕ справки на основе таблицы данных об участниках\
+            \ СВО.\n\nИспользуй только приведённые данные. Сформулируй связный официальный\
+            \ текст-ответ на запрос пользователя, который ляжет в тело справки. Без markdown,\
+            \ без таблиц, обычным текстом. Если данных не хватает — отметь это в тексте."
+        - id: spr-user
+          role: user
+          text: "Данные таблицы (легенда столбцов + записи):\n{{#parse_excel.excel_text#}}\n\
+            \nЗапрос для справки: {{#sys.query#}}"
+        selected: false
+        title: LLM текст справки
+        type: llm
+        vision: {enabled: false}
+      height: 90
+      id: llm_spravka
+      position: {x: 1180, y: 560}
+      positionAbsolute: {x: 1180, y: 560}
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        code: |-
+          import json
+          from datetime import datetime
+
+          def main(answer, topic):
+              variables = {
+                  "approver_position": "",
+                  "approver_name": "",
+                  "reference_title": "СПРАВКА",
+                  "task_title": (topic or "").strip() or "Справка по данным таблицы",
+                  "reference_date": datetime.now().strftime("%d.%m.%Y"),
+                  "protocol_number": "",
+                  "tasks_completed": (answer or "").strip(),
+              }
+              return {"docx_variables": json.dumps(variables, ensure_ascii=False)}
+        code_language: python3
+        desc: 'Формирует переменные DOCX-шаблона: reference_title=СПРАВКА, дата=сегодня,
+          tasks_completed=ответ LLM.'
+        outputs:
+          docx_variables: {children: null, type: string}
+        selected: false
+        title: Переменные справки
+        type: code
+        variables:
+        - value_selector: [llm_spravka, text]
+          value_type: string
+          variable: answer
+        - value_selector: [sys, query]
+          value_type: string
+          variable: topic
+      height: 54
+      id: build_docx
+      position: {x: 1500, y: 560}
+      positionAbsolute: {x: 1500, y: 560}
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        is_team_authorization: true
+        paramSchemas:
+        - auto_generate: null
+          default: null
+          form: form
+          human_description:
+            en_US: One or more DOCX template files.
+            ja_JP: One or more DOCX template files.
+            pt_BR: One or more DOCX template files.
+            zh_Hans: One or more DOCX template files.
+          label:
+            en_US: DOCX templates
+            ja_JP: DOCX templates
+            pt_BR: DOCX templates
+            zh_Hans: DOCX templates
+          llm_description: One or more DOCX template files.
+          max: null
+          min: null
+          name: docx_temp
+          options: []
+          placeholder: null
+          precision: null
+          required: true
+          scope: null
+          template: null
+          type: files
+        - auto_generate: null
+          default: null
+          form: form
+          human_description:
+            en_US: Key-value object for template placeholder substitution.
+            ja_JP: Key-value object for template placeholder substitution.
+            pt_BR: Key-value object for template placeholder substitution.
+            zh_Hans: Key-value object for template placeholder substitution.
+          label:
+            en_US: Variables
+            ja_JP: Variables
+            pt_BR: Variables
+            zh_Hans: Variables
+          llm_description: Key-value object for template placeholder substitution.
+          max: null
+          min: null
+          name: variables
+          options: []
+          placeholder: null
+          precision: null
+          required: true
+          scope: null
+          template: null
+          type: string
+        - auto_generate: null
+          default: null
+          form: form
+          human_description:
+            en_US: Optional Python script for variable preprocessing.
+            ja_JP: Optional Python script for variable preprocessing.
+            pt_BR: Optional Python script for variable preprocessing.
+            zh_Hans: Optional Python script for variable preprocessing.
+          label:
+            en_US: Preprocessing script (optional)
+            ja_JP: Preprocessing script (optional)
+            pt_BR: Preprocessing script (optional)
+            zh_Hans: Preprocessing script (optional)
+          llm_description: Optional Python script for variable preprocessing.
+          max: null
+          min: null
+          name: script
+          options: []
+          placeholder: null
+          precision: null
+          required: false
+          scope: null
+          template: null
+          type: string
+        params:
+          docx_temp: ''
+          script: ''
+          variables: ''
+        plugin_id: scibox/document-generator
+        plugin_unique_identifier: scibox/document-generator:0.0.1@dd7c5e14746b852f9a4c319bee5bf633135d35657a69415289652216e39b7865
+        provider_id: scibox/document-generator/document-generator
+        provider_name: scibox/document-generator/document-generator
+        provider_type: builtin
+        selected: false
+        title: Generate DOCX
+        tool_configurations:
+          docx_temp:
+            type: variable
+            value:
+            - start_node
+            - template
+          script:
+            type: mixed
+            value: ''
+          variables:
+            type: mixed
+            value: '{{#build_docx.docx_variables#}}'
+        tool_description: Generate DOCX from template with variables and optional script
+        tool_label: Generate DOCX
+        tool_name: generate_docx
+        tool_node_version: '2'
+        tool_parameters: {}
+        type: tool
+      height: 142
+      id: generate_docx
+      position: {x: 1820, y: 560}
+      positionAbsolute: {x: 1820, y: 560}
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        answer: 'Справка готова: {{#generate_docx.files#}}'
+        desc: ''
+        selected: false
+        title: Ответ со справкой
+        type: answer
+        variables: []
+      height: 106
+      id: answer_spravka
+      position: {x: 2140, y: 560}
+      positionAbsolute: {x: 2140, y: 560}
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    viewport: {x: 200, y: 80, zoom: 0.6}
+  rag_pipeline_variables: []

@@ -1,0 +1,62 @@
+{# Переиспользуемые макросы отображения событий. #}
+
+{%- macro event_payload(e) -%}
+{{ {
+  "id": e.id,
+  "title": e.title,
+  "description": e.description,
+  "start_at": e.start_at.isoformat(),
+  "end_at": e.end_at.isoformat(),
+  "location_type": e.location_type,
+  "city": e.city,
+  "address": e.address,
+  "meeting_url": e.meeting_url,
+  "priority": e.priority,
+  "importance": e.importance,
+  "status": e.status
+} | tojson }}
+{%- endmacro -%}
+
+{%- macro loc_label(e) -%}
+  {%- if e.location_type == 'online' -%}Онлайн{%- elif e.location_type == 'hybrid' -%}Гибрид{%- else -%}Офлайн{%- endif -%}
+{%- endmacro -%}
+
+{%- macro status_chip(status) -%}
+  {%- if status == 'completed' -%}<span class="chip green">проведена</span>
+  {%- elif status == 'cancelled' -%}<span class="chip red">отменена</span>
+  {%- else -%}<span class="chip">запланирована</span>{%- endif -%}
+{%- endmacro -%}
+
+{%- macro format_badge(e) -%}
+  {%- if e.location_type == 'online' -%}<span class="badge badge-online">● Онлайн</span>
+  {%- elif e.location_type == 'hybrid' -%}<span class="badge badge-hybrid">● Гибрид</span>
+  {%- else -%}<span class="badge badge-offline">● Очно</span>{%- endif -%}
+{%- endmacro -%}
+
+{%- macro priority_badge(p) -%}
+  {%- if p >= 9 -%}<span class="badge prio-critical" title="Критический приоритет">P{{ p }}</span>
+  {%- elif p >= 7 -%}<span class="badge prio-high" title="Высокий приоритет">P{{ p }}</span>
+  {%- elif p >= 4 -%}<span class="badge prio-mid" title="Средний приоритет">P{{ p }}</span>
+  {%- else -%}<span class="badge prio-low" title="Низкий приоритет">P{{ p }}</span>{%- endif -%}
+{%- endmacro -%}
+
+{%- macro prio_class(p) -%}
+  {%- if p >= 9 -%}prio-critical{%- elif p >= 7 -%}prio-high{%- elif p >= 4 -%}prio-mid{%- else -%}prio-low{%- endif -%}
+{%- endmacro -%}
+
+{%- macro event_row(e) -%}
+<div class="event-row" data-event='{{ event_payload(e) }}' role="button" tabindex="0">
+  <div class="time">
+    {{ e.start_at.strftime('%H:%M') }}–{{ e.end_at.strftime('%H:%M') }}
+    <small>{{ e.start_at.strftime('%a %d.%m') }}</small>
+  </div>
+  <div class="body">
+    <div class="title">{{ e.title }}</div>
+    <div class="sub">
+      <span class="dot {{ e.location_type }}"></span>
+      {{ loc_label(e) }}{% if e.city %} · {{ e.city }}{% endif %}{% if e.meeting_url %} · онлайн-ссылка{% endif %}
+    </div>
+  </div>
+  <div class="prio" title="Приоритет">{{ e.priority }}</div>
+</div>
+{%- endmacro -%}

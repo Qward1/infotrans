@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Документы · {{ app_name }}{% endblock %}
+{% block page_title %}Документы и протоколы{% endblock %}
+{% block page_subtitle %}Загрузка PDF/DOCX/TXT · автоматический протокол встречи{% endblock %}
+
+{% block content %}
+<div class="grid cols-2" style="align-items:start;">
+  <section class="panel glass">
+    <div class="panel-head"><h2>Загрузить документ</h2></div>
+    <div class="dropzone" id="doc-dropzone">
+      <input type="file" id="doc-file" accept=".txt,.md,.pdf,.docx" hidden />
+      <div class="dz-icon">📄</div>
+      <div class="dz-title">Перетащите файл сюда или нажмите</div>
+      <div class="dz-hint muted">Поддерживаются PDF, DOCX, TXT, MD · до нескольких МБ</div>
+    </div>
+
+    <div class="panel-head" style="margin-top:22px;"><h2>Загруженные документы</h2></div>
+    <div id="doc-list">
+      {% if documents %}
+        {% for d in documents %}
+        <div class="event-row" data-doc-id="{{ d.id }}">
+          <div class="prio" style="background:var(--chip-bg); color:var(--accent-strong);">📄</div>
+          <div class="body">
+            <div class="title">{{ d.filename }}</div>
+            <div class="sub muted">
+              {{ (d.size_bytes / 1024) | round(1) }} КБ · {{ d.created_at.strftime('%d.%m.%Y %H:%M') }}
+              {% if not (d.text and d.text.strip()) %}· <span class="a-warn" style="display:inline">текст не извлечён</span>{% endif %}
+            </div>
+          </div>
+          <button class="btn small primary" data-make-protocol="{{ d.id }}">Сформировать протокол</button>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div class="empty-state" id="doc-empty">
+          <div class="big">🗂️</div>
+          Пока нет загруженных документов.<br />
+          Загрузите протокол встречи — ассистент разберёт его на решения и задачи.
+        </div>
+      {% endif %}
+    </div>
+  </section>
+
+  <section class="panel glass" id="protocol-panel">
+    <div class="panel-head"><h2>Протокол встречи</h2></div>
+    <div class="empty-state" id="protocol-empty">
+      <div class="big">📝</div>
+      Выберите документ и нажмите «Сформировать протокол».<br />
+      Здесь появятся summary, решения, задачи, ответственные, сроки и follow-up встречи.
+    </div>
+    <div id="protocol-body" style="display:none;"></div>
+  </section>
+</div>
+
+{% include "_event_modal.html" %}
+{% endblock %}

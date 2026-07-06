@@ -1,0 +1,80 @@
+<!-- Модалка создания/редактирования встречи. Логика — в app.js. -->
+<div class="modal-backdrop" id="event-modal">
+  <div class="modal glass">
+    <div class="modal-head">
+      <h2 id="event-modal-title">Новая встреча</h2>
+      <button type="button" class="close" onclick="closeEventModal()">×</button>
+    </div>
+    <form>
+      <input type="hidden" name="id" />
+      <div class="field">
+        <label>Название</label>
+        <input name="title" required maxlength="255" placeholder="Например: Встреча с подрядчиком" />
+      </div>
+      <div class="field">
+        <label>Описание</label>
+        <textarea name="description" placeholder="Повестка, ссылки, заметки…"></textarea>
+      </div>
+      <div class="form-row">
+        <div class="field">
+          <label>Начало</label>
+          <input name="start_at" type="datetime-local" required />
+        </div>
+        <div class="field">
+          <label>Окончание</label>
+          <input name="end_at" type="datetime-local" required />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="field">
+          <label>Формат</label>
+          <select name="location_type">
+            <option value="offline">Офлайн</option>
+            <option value="online">Онлайн</option>
+            <option value="hybrid">Гибрид</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Город</label>
+          <input name="city" placeholder="Москва" />
+        </div>
+      </div>
+      <div class="field">
+        <label>Адрес</label>
+        <input name="address" placeholder="ул. Тверская, 1" />
+      </div>
+      <div class="field">
+        <label>Ссылка на встречу</label>
+        <input name="meeting_url" placeholder="https://meet.example.com/..." />
+      </div>
+      <div class="form-row">
+        <div class="field">
+          <label>Приоритет (0–10)</label>
+          <input name="priority" type="number" min="0" max="10" value="5" />
+        </div>
+        <div class="field">
+          <label>Важность</label>
+          <select name="importance">
+            <option value="low">Низкая</option>
+            <option value="normal" selected>Обычная</option>
+            <option value="high">Высокая</option>
+            <option value="critical">Критическая</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label>Статус</label>
+        <select name="status">
+          <option value="planned">Запланирована</option>
+          <option value="completed">Проведена</option>
+          <option value="cancelled">Отменена</option>
+        </select>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn danger" data-role="delete" style="margin-right:auto; display:none;">Удалить</button>
+        <button type="button" class="btn ghost" onclick="closeEventModal()">Отмена</button>
+        <button type="submit" class="btn primary">Сохранить</button>
+      </div>
+    </form>
+  </div>
+</div>

@@ -1,0 +1,35 @@
+# Локальная конфигурация с секретами — не коммитим.
+config/config.yaml
+config/config.yaml.bak
+
+# База данных / данные
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Виртуальные окружения
+.venv/
+venv/
+env/
+
+# Загруженные пользователями файлы
+uploads/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store

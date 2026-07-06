@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Ассистент · {{ app_name }}{% endblock %}
+{% block page_title %}Ассистент{% endblock %}
+{% block page_subtitle %}Режим: {{ assistant_mode }} · чат по календарю, слотам и билетам{% endblock %}
+
+{% block content %}
+<div class="chat-shell">
+  <section class="chat-panel glass">
+    <div class="chat-log" id="chat-log">
+      <div class="msg bot">
+        Здравствуйте, {{ current_user.full_name or current_user.email }}! Я ассистент умного календаря.
+        Я работаю в demo-режиме и уже умею искать свободные окна, конфликты и билеты.
+        Спросите, например: «Когда я свободен на этой неделе?»
+        <span class="meta">интент: help · режим: {{ assistant_mode }}</span>
+      </div>
+    </div>
+    <form class="chat-input" id="chat-form">
+      <input type="file" id="chat-file" accept=".txt,.md,.pdf,.docx" style="display:none" />
+      <button type="button" class="btn icon ghost" onclick="document.getElementById('chat-file').click()" title="Загрузить документ">📎</button>
+      <input id="chat-input" autocomplete="off" placeholder="Напишите сообщение…" />
+      <button type="submit" class="btn primary">Отправить</button>
+    </form>
+  </section>
+
+  <aside class="chat-side">
+    <div class="card glass">
+      <h3>Примеры запросов</h3>
+      <div class="hint" style="margin-bottom:12px;">Нажмите, чтобы отправить</div>
+      <div class="suggest">
+        <button class="btn small ghost" data-suggest="Поставь встречу с Анной завтра в 15:00 на час">📅 Поставь встречу с Анной завтра в 15:00 на час</button>
+        <button class="btn small ghost" data-suggest="Покажи мой календарь на неделю">📆 Покажи мой календарь на неделю</button>
+        <button class="btn small ghost" data-suggest="Найди свободное окно с Иваном на пятницу">🟢 Найди свободное окно с Иваном на пятницу</button>
+        <button class="btn small ghost" data-suggest="Найди билеты Москва — Санкт-Петербург на завтра">🎫 Найди билеты Москва — Санкт-Петербург на завтра</button>
+        <button class="btn small ghost" data-suggest="Сформируй протокол из загруженного документа">📝 Сформируй протокол из загруженного документа</button>
+      </div>
+    </div>
+
+    <div class="card glass">
+      <h3>Возможности</h3>
+      <div class="hint">
+        • нормализация запроса → строгий JSON-интент<br />
+        • создание/перенос/удаление встреч (с подтверждением)<br />
+        • свободные слоты для нескольких участников<br />
+        • конфликт-резолвинг по приоритету + буфер на дорогу<br />
+        • подбор авиа/жд билетов (mock/provider)<br />
+        • протокол из PDF/DOCX + встречи по протоколу
+      </div>
+    </div>
+
+    <div class="card glass">
+      <h3>Режим</h3>
+      <div class="hint">
+        Ассистент: <strong>{{ assistant_mode }}</strong><br />
+        {% if assistant_mode == 'local' %}Работает локальный нормализатор (без внешних ключей). Dify включается в <a href="/settings">настройках</a>.{% else %}Запросы идут в Dify с fallback на локальный режим.{% endif %}
+      </div>
+    </div>
+  </aside>
+</div>
+
+{% include "_event_modal.html" %}
+{% endblock %}

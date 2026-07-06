@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block title %}Календарь · {{ app_name }}{% endblock %}
+{% block page_title %}Календарь{% endblock %}
+{% block page_subtitle %}Неделя {{ week_start.strftime('%d.%m') }} — {{ week_end.strftime('%d.%m.%Y') }}{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn ghost" id="find-slot-btn">🟢 Свободный слот</button>
+<button class="btn primary" data-new-event>＋ Встреча</button>
+{% endblock %}
+
+{% block content %}
+<div class="cal-toolbar glass panel">
+  <div class="flex items-center gap-8">
+    <a class="btn small ghost" href="/calendar?week={{ prev_week }}">‹ Назад</a>
+    <a class="btn small" href="/calendar?week={{ this_week }}">Сегодня</a>
+    <a class="btn small ghost" href="/calendar?week={{ next_week }}">Вперёд ›</a>
+  </div>
+  <div class="cal-range">{{ week_start.strftime('%d.%m.%Y') }} — {{ week_end.strftime('%d.%m.%Y') }}</div>
+  <div class="flex items-center gap-12 wrap">
+    <span class="badge badge-online">● Онлайн</span>
+    <span class="badge badge-offline">● Очно</span>
+    <span class="badge badge-hybrid">● Гибрид</span>
+    <span class="muted nowrap">клик по встрече — редактировать</span>
+  </div>
+</div>
+
+<div class="week-grid" style="margin-top:16px;">
+  {% set dows = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'] %}
+  {% for day in days %}
+  <div class="day-col glass {{ 'today' if day.date.date() == now_date }}">
+    <div class="day-head">
+      <span class="dow">{{ dows[loop.index0] }}</span>
+      <span class="dnum">{{ day.date.strftime('%d') }}</span>
+    </div>
+    <span class="day-add" data-new-event data-day="{{ day.date.strftime('%Y-%m-%d') }}">＋ добавить</span>
+
+    {% if day.events %}
+      {% for e in day.events %}
+      <div class="cal-event p-{{ 'critical' if e.priority >= 9 else 'high' if e.priority >= 7 else 'mid' if e.priority >= 4 else 'low' }} {{ 'cancelled' if e.status == 'cancelled' }} {{ 'conflict' if e.id in conflict_ids }}"
+           data-event='{{ m.event_payload(e) }}' role="button" tabindex="0"
+           title="{{ e.title }} · приоритет {{ e.priority }}{% if e.id in conflict_ids %} · конфликт{% endif %}">
+        <div class="ce-time">{{ e.start_at.strftime('%H:%M') }}–{{ e.end_at.strftime('%H:%M') }}</div>
+        <div class="ce-title">{{ e.title }}</div>
+        <div class="ce-loc">
+          <span class="dot {{ e.location_type }}"></span>
+          {{ m.loc_label(e) }}{% if e.city %} · {{ e.city }}{% elif e.meeting_url %} · ссылка{% endif %}
+        </div>
+        <div class="ce-badges">
+          {{ m.priority_badge(e.priority) }}
+          {% if e.id in conflict_ids %}<span class="badge conflict-flag">⚠ конфликт</span>{% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="cal-empty">нет встреч</div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Модалка поиска свободного слота -->
+<div class="modal-backdrop" id="slot-modal">
+  <div class="modal glass">
+    <div class="modal-head">
+      <h2>Найти свободный слот</h2>
+      <button type="button" class="close" onclick="document.getElementById('slot-modal').classList.remove('open')">×</button>
+    </div>
+    <div class="form-row">
+      <div class="field">
+        <label>Длительность, мин</label>
+        <input id="slot-duration" type="number" min="15" max="480" step="15" value="60" />
+      </div>
+      <div class="field">
+        <label>Горизонт, дней</label>
+        <input id="slot-days" type="number" min="1" max="30" value="7" />
+      </div>
+    </div>
+    <button class="btn primary" id="slot-search" style="width:100%; justify-content:center;">Найти окна</button>
+    <div id="slot-results" class="slot-list" style="margin-top:16px;"></div>
+  </div>
+</div>
+
+{% include "_event_modal.html" %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    var modal = document.getElementById("slot-modal");
+    var openBtn = document.getElementById("find-slot-btn");
+    var searchBtn = document.getElementById("slot-search");
+    var out = document.getElementById("slot-results");
+    if (!openBtn) return;
+
+    openBtn.addEventListener("click", function () { modal.classList.add("open"); });
+    modal.addEventListener("click", function (e) { if (e.target === modal) modal.classList.remove("open"); });
+
+    searchBtn.addEventListener("click", async function () {
+      var dur = parseInt(document.getElementById("slot-duration").value, 10) || 60;
+      var days = parseInt(document.getElementById("slot-days").value, 10) || 7;
+      out.innerHTML = '<div class="loading"><span class="spinner"></span> Ищу свободные окна…</div>';
+      try {
+        var slots = await window.api("GET", "/api/scheduling/free-slots?duration=" + dur + "&days=" + days);
+        if (!slots.length) { out.innerHTML = '<div class="a-muted">Свободных окон не найдено в рабочих часах.</div>'; return; }
+        out.innerHTML = slots.slice(0, 12).map(function (s) {
+          var start = new Date(s.start_at), end = new Date(s.end_at);
+          var label = start.toLocaleString("ru-RU", { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) +
+            "–" + end.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+          return '<div class="slot-pill"><span>' + label + ' · ' + s.minutes + ' мин</span>' +
+            '<button class="btn small ghost" data-take=\'' + JSON.stringify({ start_at: s.start_at, end_at: s.end_at, source: "assistant" }) + '\'>Занять</button></div>';
+        }).join("");
+        out.querySelectorAll("[data-take]").forEach(function (b) {
+          b.addEventListener("click", function () {
+            modal.classList.remove("open");
+            if (window.openEventModal) window.openEventModal(JSON.parse(b.getAttribute("data-take")));
+          });
+        });
+      } catch (e) { out.innerHTML = '<div class="alert error">' + e.message + '</div>'; }
+    });
+  });
+</script>
+{% endblock %}

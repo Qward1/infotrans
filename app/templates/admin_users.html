@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Пользователи · {{ app_name }}{% endblock %}
+{% block page_title %}Пользователи{% endblock %}
+{% block page_subtitle %}Управление сотрудниками, ролями и доступом{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn primary" onclick="openUserModal()">＋ Пользователь</button>
+{% endblock %}
+
+{% block content %}
+<section class="panel glass">
+  <div class="table-wrap">
+    <table class="data">
+      <thead>
+        <tr>
+          <th>Имя</th>
+          <th>Email</th>
+          <th>Роль</th>
+          <th>Статус</th>
+          <th class="num">Встреч</th>
+          <th>Создан</th>
+          <th class="right">Действия</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in users %}
+        <tr>
+          <td>
+            <div class="flex items-center gap-8">
+              <span class="avatar" style="width:30px;height:30px;font-size:13px;">{{ (u.full_name or u.email)[0] | upper }}</span>
+              <strong>{{ u.full_name or '—' }}</strong>
+              {% if u.id == current_user.id %}<span class="badge badge-user">вы</span>{% endif %}
+            </div>
+          </td>
+          <td>{{ u.email }}</td>
+          <td>
+            {% if u.role == 'admin' %}<span class="badge badge-admin">admin</span>{% else %}<span class="badge badge-user">user</span>{% endif %}
+          </td>
+          <td>
+            {% if u.is_active %}<span class="chip green">активен</span>{% else %}<span class="chip red">отключён</span>{% endif %}
+          </td>
+          <td class="num">{{ event_counts.get(u.id, 0) }}</td>
+          <td class="muted nowrap">{{ u.created_at.strftime('%d.%m.%Y') }}</td>
+          <td class="right nowrap">
+            <button class="btn small ghost"
+              data-user='{{ {"id": u.id, "email": u.email, "full_name": u.full_name, "role": u.role, "is_active": u.is_active} | tojson }}'>
+              Изменить
+            </button>
+            {% set is_last_admin = u.role == 'admin' and u.is_active and active_admins <= 1 %}
+            {% if u.is_active %}
+              <button class="btn small ghost" data-toggle-active="{{ u.id }}" data-to="false"
+                {% if is_last_admin %}disabled title="Единственный активный администратор"{% endif %}>Отключить</button>
+            {% else %}
+              <button class="btn small ghost" data-toggle-active="{{ u.id }}" data-to="true">Включить</button>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+{% include "_user_modal.html" %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    document.querySelectorAll("[data-toggle-active]").forEach(function (b) {
+      b.addEventListener("click", async function () {
+        var id = b.getAttribute("data-toggle-active");
+        var to = b.getAttribute("data-to") === "true";
+        if (!confirm(to ? "Включить пользователя?" : "Отключить пользователя?")) return;
+        b.disabled = true;
+        try {
+          await window.api("PATCH", "/api/admin/users/" + id, { is_active: to });
+          window.toast(to ? "Пользователь включён" : "Пользователь отключён");
+          setTimeout(function () { location.reload(); }, 400);
+        } catch (e) { b.disabled = false; window.toast(e.message, "err"); }
+      });
+    });
+  });
+</script>
+{% endblock %}

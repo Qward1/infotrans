@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m %}
+{% block title %}Дашборд · {{ app_name }}{% endblock %}
+{% block page_title %}Дашборд{% endblock %}
+{% block page_subtitle %}Обзор недели · {{ week_start.strftime('%d.%m.%Y') }}{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn primary" data-new-event>＋ Новая встреча</button>
+{% endblock %}
+
+{% block content %}
+<section class="panel glass greeting" style="margin-bottom:18px;">
+  <h2>{{ greeting }}, {{ (current_user.full_name or current_user.email).split(' ')[0] }}! 👋</h2>
+  <p>
+    {% if stats.today %}Сегодня у вас {{ stats.today }} встреч(и).{% else %}На сегодня встреч не запланировано.{% endif %}
+    {% if stats.conflicts %} Обнаружено конфликтов: {{ stats.conflicts }}.{% endif %}
+  </p>
+</section>
+
+<div class="grid cols-4" style="margin-bottom:18px;">
+  <div class="stat glass">
+    <span class="label">Встреч на неделе</span>
+    <span class="value"><span class="ic">📆</span>{{ stats.week_events }}</span>
+  </div>
+  <div class="stat glass">
+    <span class="label">Сегодня</span>
+    <span class="value"><span class="ic">📌</span>{{ stats.today }}</span>
+  </div>
+  <div class="stat glass">
+    <span class="label">Свободных окон (7 дн.)</span>
+    <span class="value"><span class="ic">🟢</span>{{ stats.free_slots }}</span>
+  </div>
+  <div class="stat glass">
+    <span class="label">Возможных конфликтов</span>
+    <span class="value"><span class="ic">⚠️</span>{{ stats.conflicts }}</span>
+  </div>
+</div>
+
+<section class="panel glass" style="margin-bottom:18px;">
+  <div class="panel-head"><h2>Быстрые действия</h2></div>
+  <div class="quick-actions">
+    <a class="qa" data-new-event><span class="qa-ic">➕</span><span class="qa-label">Создать встречу</span></a>
+    <a class="qa" href="/chat"><span class="qa-ic">💬</span><span class="qa-label">Чат-секретарь</span></a>
+    <a class="qa" href="/chat" data-suggest-link="Когда я свободен на этой неделе на 30 минут?"><span class="qa-ic">🟢</span><span class="qa-label">Свободный слот</span></a>
+    <a class="qa" href="/documents"><span class="qa-ic">📄</span><span class="qa-label">Загрузить протокол</span></a>
+    <a class="qa" href="/travel"><span class="qa-ic">🎫</span><span class="qa-label">Найти билеты</span></a>
+  </div>
+</section>
+
+<div class="grid cols-2">
+  <div>
+    <section class="panel glass" style="margin-bottom:18px;">
+      <div class="panel-head">
+        <h2>Встречи сегодня</h2>
+        <a href="/calendar" class="btn small ghost">Календарь</a>
+      </div>
+      {% if today_events %}
+        {% for e in today_events %}{{ m.event_row(e) }}{% endfor %}
+      {% else %}
+        <div class="empty-state"><div class="big">☕</div>На сегодня встреч нет — хорошего дня!</div>
+      {% endif %}
+    </section>
+
+    <section class="panel glass">
+      <div class="panel-head"><h2>Нагрузка по дням недели</h2></div>
+      <div class="vbars">
+        {% for d in week_load %}
+        <div class="vbar">
+          <div class="vval">{{ d.count }}</div>
+          <div class="col" style="height: {{ ((d.count / max_load * 100) if max_load else 0) | round(0, 'floor') }}%;
+            {% if d.is_today %}background: linear-gradient(180deg, var(--warning), var(--accent-strong));{% endif %}"></div>
+          <div class="vlabel">{{ d.label }}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+  </div>
+
+  <div>
+    <section class="panel glass" style="margin-bottom:18px;">
+      <div class="panel-head">
+        <h2>Ближайшие встречи</h2>
+        <a href="/calendar" class="btn small ghost">Открыть календарь</a>
+      </div>
+      {% if upcoming %}
+        {% for e in upcoming %}{{ m.event_row(e) }}{% endfor %}
+      {% else %}
+        <div class="empty-state">
+          <div class="big">🗓️</div>
+          Пока нет запланированных встреч.<br />
+          <button class="btn primary small" data-new-event style="margin-top:12px;">Создать первую</button>
+        </div>
+      {% endif %}
+    </section>
+
+    <section class="panel glass">
+      <div class="panel-head"><h2>Конфликты расписания</h2></div>
+      {% if conflicts %}
+        {% for c in conflicts %}
+        <div class="event-row">
+          <div class="prio" style="background:rgba(224,71,91,0.15); color:var(--danger);">!</div>
+          <div class="body">
+            <div class="title">{{ c.drop.title }}</div>
+            <div class="sub">
+              пересекается с «{{ c.keep.title }}» · приоритет {{ c.drop.priority }} ≤ {{ c.keep.priority }}
+              → кандидат на перенос
+            </div>
+          </div>
+          <span class="badge conflict-flag">конфликт</span>
+        </div>
+        {% endfor %}
+      {% else %}
+        <p class="muted mb-0">Пересечений не найдено. Расписание в порядке 👍</p>
+      {% endif %}
+    </section>
+  </div>
+</div>
+
+{% include "_event_modal.html" %}
+{% endblock %}

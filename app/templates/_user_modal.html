@@ -1,0 +1,47 @@
+<!-- Модалка создания/редактирования пользователя. Логика — в app.js. -->
+<div class="modal-backdrop" id="user-modal">
+  <div class="modal glass">
+    <div class="modal-head">
+      <h2 id="user-modal-title">Новый пользователь</h2>
+      <button type="button" class="close" onclick="closeUserModal()">×</button>
+    </div>
+    <form>
+      <input type="hidden" name="id" />
+      <div class="field">
+        <label>Email</label>
+        <input name="email" type="email" placeholder="user@company.ru" />
+      </div>
+      <div class="field">
+        <label>Имя</label>
+        <input name="full_name" placeholder="Иван Иванов" />
+      </div>
+      <div class="form-row">
+        <div class="field">
+          <label>Роль</label>
+          <select name="role">
+            <option value="user">Пользователь</option>
+            <option value="admin">Администратор</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Статус</label>
+          <select name="is_active">
+            <option value="true">Активен</option>
+            <option value="false">Отключён</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label>Пароль</label>
+        <input name="password" type="password" minlength="6" placeholder="минимум 6 символов" />
+        <span class="muted" data-role="pw-hint" style="font-size:12px; display:none;">
+          Оставьте пустым, чтобы не менять пароль.
+        </span>
+      </div>
+      <div class="modal-foot">
+        <button type="button" class="btn ghost" onclick="closeUserModal()">Отмена</button>
+        <button type="submit" class="btn primary">Сохранить</button>
+      </div>
+    </form>
+  </div>
+</div>

@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Уведомления · {{ app_name }}{% endblock %}
+{% block page_title %}Уведомления{% endblock %}
+{% block page_subtitle %}Все каналы · непрочитанных: {{ unread }}{% endblock %}
+
+{% block topbar_actions %}
+{% if items %}<button class="btn ghost" id="notif-read-all">Отметить все прочитанными</button>{% endif %}
+{% endblock %}
+
+{% block content %}
+<section class="panel glass">
+  {% if items %}
+  <div class="table-wrap">
+    <table class="data">
+      <thead>
+        <tr>
+          <th>Статус</th>
+          <th>Уведомление</th>
+          <th>Канал</th>
+          <th>Встреча</th>
+          <th class="nowrap">Создано</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for it in items %}
+        {% set n = it.note %}
+        <tr class="{{ 'notif-unread-row' if n.status != 'read' }}">
+          <td>
+            {% if n.status == 'read' %}<span class="badge badge-user">прочитано</span>
+            {% else %}<span class="badge prio-high">новое</span>{% endif %}
+          </td>
+          <td>
+            <div class="title" style="font-weight:600;">{{ n.title }}</div>
+            <div class="muted" style="font-size:13px;">{{ n.text }}</div>
+          </td>
+          <td>
+            {% if n.channel == 'messenger' %}<span class="badge badge-online">💬 messenger</span>
+            {% elif n.channel == 'email' %}<span class="badge badge-hybrid">✉️ email</span>
+            {% else %}<span class="badge badge-user">🌐 web</span>{% endif %}
+          </td>
+          <td>
+            {% if it.related %}
+              <a href="/calendar">{{ it.related.title }}</a>
+              <div class="muted" style="font-size:12px;">{{ it.related.start_at.strftime('%d.%m %H:%M') }}</div>
+            {% else %}<span class="muted">—</span>{% endif %}
+          </td>
+          <td class="muted nowrap">{{ n.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <div class="big">🔔</div>
+    Уведомлений пока нет.<br />
+    Они появляются при создании встреч, приглашениях, переносах и напоминаниях.
+  </div>
+  {% endif %}
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    var btn = document.getElementById("notif-read-all");
+    if (btn) btn.addEventListener("click", async function () {
+      try {
+        await window.api("POST", "/api/notifications/read", {});
+        window.toast("Все уведомления отмечены прочитанными");
+        setTimeout(function () { location.reload(); }, 400);
+      } catch (e) { window.toast(e.message, "err"); }
+    });
+  });
+</script>
+{% endblock %}

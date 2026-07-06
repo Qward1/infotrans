@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}Билеты · {{ app_name }}{% endblock %}
+{% block page_title %}Поиск билетов и поездок{% endblock %}
+{% block page_subtitle %}Авиа · ЖД · автобус · режим: {{ tickets_mode }}{% endblock %}
+
+{% block content %}
+<div class="chat-shell">
+  <div>
+    <section class="panel glass" style="margin-bottom:18px;">
+      <div class="panel-head"><h2>Параметры поездки</h2></div>
+      <form id="travel-form">
+        <div class="form-row">
+          <div class="field">
+            <label>Откуда</label>
+            <input name="origin" required placeholder="Москва" value="Москва" />
+          </div>
+          <div class="field">
+            <label>Куда</label>
+            <input name="destination" required placeholder="Санкт-Петербург" value="Санкт-Петербург" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label>Дата «туда»</label>
+            <input name="date" type="date" value="{{ default_date }}" />
+          </div>
+          <div class="field">
+            <label>Дата «обратно» <span class="muted">(необязательно)</span></label>
+            <input name="return_date" type="date" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label>Транспорт</label>
+            <select name="transport">
+              <option value="any">Любой</option>
+              <option value="flight">Авиа</option>
+              <option value="train">ЖД</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Бюджет, {{ currency }} <span class="muted">(необязательно)</span></label>
+            <input name="budget" type="number" min="0" step="100" placeholder="например, 6000" />
+          </div>
+        </div>
+        <div class="field">
+          <label>Предпочтения</label>
+          <div class="flex gap-8 wrap">
+            <label class="check"><input type="checkbox" name="pref" value="cheapest" /> дешевле</label>
+            <label class="check"><input type="checkbox" name="pref" value="fastest" /> быстрее</label>
+            <label class="check"><input type="checkbox" name="pref" value="direct" /> без пересадок</label>
+          </div>
+        </div>
+        <button type="submit" class="btn primary" style="width:100%; justify-content:center;">🔎 Найти билеты</button>
+      </form>
+    </section>
+
+    <section class="panel glass">
+      <div class="panel-head">
+        <h2>Результаты</h2>
+        <span class="muted" id="travel-count"></span>
+      </div>
+      <div id="travel-results">
+        <div class="empty-state" id="travel-empty">
+          <div class="big">🎫</div>
+          Задайте маршрут и нажмите «Найти билеты».<br />
+          Появятся варианты авиа/ЖД/автобус с ценой, временем в пути и ссылкой.
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <aside class="chat-side">
+    <div class="card glass">
+      <h3>Быстрые маршруты</h3>
+      <div class="hint" style="margin-bottom:12px;">Нажмите, чтобы подставить</div>
+      <div class="suggest">
+        <button class="btn small ghost" data-route="Москва|Санкт-Петербург">Москва → Санкт-Петербург</button>
+        <button class="btn small ghost" data-route="Москва|Казань">Москва → Казань</button>
+        <button class="btn small ghost" data-route="Москва|Сочи">Москва → Сочи</button>
+        <button class="btn small ghost" data-route="Санкт-Петербург|Казань">СПб → Казань</button>
+      </div>
+    </div>
+    <div class="card glass">
+      <h3>Как это работает</h3>
+      <div class="hint">
+        В demo-режиме варианты генерируются локально (детерминированно): цена, время в пути
+        и число пересадок оцениваются по расстоянию между городами.<br /><br />
+        Для боевого режима подключается реальный провайдер (Aviasales/РЖД/Яндекс.Расписания) —
+        см. <a href="/settings">настройки</a> и <code>tickets.mode: provider</code>.
+      </div>
+    </div>
+    <div class="card glass">
+      <h3>Через ассистента</h3>
+      <div class="hint">
+        То же самое можно спросить в чате: «Найди билеты Москва — Санкт-Петербург на завтра».
+        <a href="/chat" class="btn small ghost" style="margin-top:10px;">💬 Открыть чат</a>
+      </div>
+    </div>
+  </aside>
+</div>
+{% endblock %}

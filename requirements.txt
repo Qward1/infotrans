@@ -1,0 +1,28 @@
+# --- Ядро веб-приложения ---
+fastapi>=0.115,<1.0
+uvicorn[standard]>=0.30
+starlette>=0.41
+itsdangerous>=2.0          # подпись сессионных cookie (SessionMiddleware)
+
+# --- Данные ---
+SQLAlchemy>=2.0,<3.0
+pydantic>=2.8,<3.0
+
+# --- Шаблоны и формы ---
+Jinja2>=3.1
+python-multipart>=0.0.9    # загрузка файлов / form-data
+
+# --- Пароли ---
+passlib>=1.7               # по умолчанию используется pbkdf2_sha256 (stdlib)
+bcrypt>=4.0                # опционально: для проверки bcrypt-хэшей
+
+# --- Конфигурация ---
+PyYAML>=6.0
+
+# --- Ассистент: чтение документов и вызовы Dify ---
+pypdf>=4.0                 # извлечение текста из PDF (протоколы)
+python-docx>=1.1           # извлечение текста из DOCX
+httpx>=0.27               # вызовы Dify chat-messages (режим dify)
+
+# --- Опционально (следующий этап) ---
+# pdfplumber>=0.11         # более точный разбор PDF-таблиц

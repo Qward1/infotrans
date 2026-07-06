@@ -1,0 +1,107 @@
+# ============================================================================
+# Умный цифровой календарь встреч и поездок — пример конфигурации.
+#
+# Скопируйте этот файл в config/config.yaml и при необходимости отредактируйте.
+# Приложение читает ТОЛЬКО config/config.yaml (см. app/core/config.py).
+# .env НЕ используется — все настройки, ключи и параметры интеграций тут.
+# ============================================================================
+
+app:
+  name: "Умный календарь"
+  # Секрет для подписи сессионных cookie. Обязательно смените в проде.
+  secret_key: "CHANGE-ME-TO-A-LONG-RANDOM-STRING"
+  # Часовой пояс по умолчанию для новых событий.
+  timezone: "Europe/Moscow"
+  debug: true
+
+database:
+  # Любой SQLAlchemy URL. По умолчанию — локальный SQLite.
+  # Примеры:
+  #   sqlite:///./data/app.db
+  #   postgresql+psycopg://user:pass@localhost:5432/smartcal
+  #   mysql+pymysql://user:pass@localhost:3306/smartcal
+  url: "sqlite:///./data/app.db"
+  echo: false
+
+security:
+  session_cookie: "smartcal_session"
+  # Время жизни сессии в секундах (14 дней).
+  session_max_age: 1209600
+
+# Первый администратор. Создаётся автоматически при пустой таблице users.
+# Если такой пользователь уже есть — пароль НЕ перезаписывается.
+seed_admin:
+  email: "admin@demo.local"
+  password: "admin12345"
+  full_name: "Demo Admin"
+
+# Ассистент/чат-бот. Всё работает без внешних ключей (локальный нормализатор).
+assistant:
+  mode: "mock"            # mock | dify (справочно; фактически рулит dify.enabled)
+  # Прямой LLM (опционально; нормализация запроса напрямую в модель).
+  llm:
+    enabled: false        # true → нормализация через LLM (нужен api_key)
+    provider: "openai_api_compatible"
+    base_url: "https://api.example-llm.local/v1"
+    api_key: ""
+    model: "qwen3-32b-fp8-v2"
+    temperature: 0.2
+    timeout: 30
+  # Dify (подключение ассистентов из папки dify/assistants/).
+  dify:
+    enabled: false        # false → local/mock normalizer; true → вызовы Dify API
+    base_url: "https://api.dify.ai/v1"
+    api_key: "app-REPLACE-ME"
+    app_id: ""
+    timeout: 30
+    default_assistant: "smart_calendar_secretary"
+    # Ключ каждого ассистента (пусто → используется общий api_key выше).
+    assistants:
+      request_normalizer: ""
+      smart_calendar_secretary: ""
+      protocol_assistant: ""
+      travel_assistant: ""
+
+# Планирование встреч: рабочие часы, буферы на дорогу, реалистичность очных встреч.
+scheduling:
+  working_hours:
+    start: "09:00"
+    end: "19:00"
+  slot_granularity_minutes: 30
+  default_meeting_minutes: 60
+  max_alternatives: 5
+  default_travel_buffer_minutes: 60       # адрес неизвестен
+  same_city_travel_buffer_minutes: 40     # тот же город, другой адрес
+  same_address_buffer_minutes: 0
+  online_buffer_minutes: 0
+  realistic_offline_max_travel_minutes: 300  # дольше — предлагаем онлайн
+  high_priority_threshold: 8              # выше — нельзя автоматически сдвигать
+
+# Поиск билетов/поездок. mock — генерирует правдоподобные варианты локально.
+tickets:
+  mode: "mock"            # mock | provider
+  # Средняя скорость (км/ч) для оценки времени в дороге, если провайдер не отдаёт длительность.
+  avg_speed_kmh: 65
+  currency: "RUB"
+  same_day_return_max_hours: 10
+  provider:
+    name: "generic"
+    base_url: ""
+    api_key: ""
+    timeout: 30
+
+# Уведомления. mock — пишутся в БД и показываются в UI/audit log.
+notifications:
+  mode: "mock"            # mock | provider
+  default_channel: "messenger"
+  channels: ["web", "messenger", "email"]   # включённые каналы (для отображения)
+  messenger:
+    enabled: false
+    provider: "mock"      # mock | max | telegram | email
+    base_url: ""
+    api_key: ""
+
+# Demo-наполнение БД при старте (пользователи, встречи, уведомления, документ).
+demo:
+  # true → при ПУСТОЙ базе создаются demo-данные. Идемпотентно (не дублируется).
+  seed_on_startup: true

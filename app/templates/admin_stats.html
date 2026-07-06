@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% block title %}Статистика · {{ app_name }}{% endblock %}
+{% block page_title %}Статистика команды{% endblock %}
+{% block page_subtitle %}Нагрузка · форматы · приоритеты · конфликты · журнал аудита{% endblock %}
+
+{% block content %}
+<!-- KPI -->
+<div class="grid cols-4" style="margin-bottom:18px;">
+  <div class="stat glass">
+    <span class="label">Всего встреч</span>
+    <span class="value"><span class="ic">📆</span>{{ overview.total_events }}</span>
+    <span class="sub">предстоящих: {{ overview.upcoming_events }}</span>
+  </div>
+  <div class="stat glass">
+    <span class="label">Средняя длительность</span>
+    <span class="value"><span class="ic">⏱️</span>{{ overview.avg_duration_minutes }}<span style="font-size:16px;"> мин</span></span>
+    <span class="sub">по всем встречам</span>
+  </div>
+  <div class="stat glass">
+    <span class="label">Конфликтов</span>
+    <span class="value"><span class="ic">⚠️</span>{{ overview.conflicts }}</span>
+    <span class="sub">пересечений в расписании</span>
+  </div>
+  <div class="stat glass">
+    <span class="label">Переносов</span>
+    <span class="value"><span class="ic">🔀</span>{{ overview.reschedules }}</span>
+    <span class="sub">по журналу действий</span>
+  </div>
+</div>
+
+<!-- Часы встреч за неделю + количество -->
+<div class="grid cols-2" style="margin-bottom:18px;">
+  <section class="panel glass">
+    <div class="panel-head">
+      <h2>Время на встречах за неделю</h2>
+      <span class="muted">{{ weekly.week_start.strftime('%d.%m') }}–{{ weekly.week_end.strftime('%d.%m') }}</span>
+    </div>
+    {% set max_min = (weekly.rows | map(attribute='minutes') | max) if weekly.rows else 0 %}
+    {% for r in weekly.rows %}
+    <div style="margin-bottom:12px;">
+      <div class="stat-row">
+        <span class="k">{{ r.full_name }}</span>
+        <strong>{{ r.hours }} ч <span class="muted" style="font-weight:500;">· {{ r.meetings }} встреч</span></strong>
+      </div>
+      <div class="bar"><span style="width: {{ ((r.minutes / max_min * 100) if max_min else 0) | round(0, 'floor') }}%;"></span></div>
+    </div>
+    {% endfor %}
+    {% if not weekly.rows %}<p class="muted mb-0">Нет данных за эту неделю.</p>{% endif %}
+  </section>
+
+  <section class="panel glass">
+    <div class="panel-head"><h2>Топ загруженных дней</h2></div>
+    {% set max_day = (busiest_days | map(attribute='count') | max) if busiest_days else 0 %}
+    <div class="vbars">
+      {% for d in busiest_days %}
+      <div class="vbar">
+        <div class="vval">{{ d.count }}</div>
+        <div class="col" style="height: {{ ((d.count / max_day * 100) if max_day else 0) | round(0, 'floor') }}%;"></div>
+        <div class="vlabel">{{ d.label }}</div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+
+<!-- Форматы + приоритеты -->
+<div class="grid cols-2" style="margin-bottom:18px;">
+  <section class="panel glass">
+    <div class="panel-head"><h2>Форматы встреч</h2></div>
+    {% set total_fmt = (formats | map(attribute='count') | sum) %}
+    {% for f in formats %}
+    <div style="margin-bottom:12px;">
+      <div class="stat-row">
+        <span class="k">
+          {% if f.key == 'online' %}<span class="badge badge-online">● {{ f.label }}</span>
+          {% elif f.key == 'hybrid' %}<span class="badge badge-hybrid">● {{ f.label }}</span>
+          {% else %}<span class="badge badge-offline">● {{ f.label }}</span>{% endif %}
+        </span>
+        <strong>{{ f.count }} <span class="muted" style="font-weight:500;">({{ ((f.count / total_fmt * 100) if total_fmt else 0) | round(0, 'floor') }}%)</span></strong>
+      </div>
+      <div class="bar"><span style="width: {{ ((f.count / total_fmt * 100) if total_fmt else 0) | round(0, 'floor') }}%;"></span></div>
+    </div>
+    {% endfor %}
+  </section>
+
+  <section class="panel glass">
+    <div class="panel-head"><h2>Встречи по приоритетам</h2></div>
+    {% set max_prio = (priorities | map(attribute='count') | max) if priorities else 0 %}
+    <div class="vbars">
+      {% for p in priorities %}
+      <div class="vbar">
+        <div class="vval">{{ p.count }}</div>
+        <div class="col" style="height: {{ ((p.count / max_prio * 100) if max_prio else 0) | round(0, 'floor') }}%;"></div>
+        <div class="vlabel">{{ p.label }}<br /><span class="muted">{{ p.range }}</span></div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+
+<!-- Встречи по сотрудникам (таблица) + статусы + аудит -->
+<div class="grid cols-2">
+  <section class="panel glass">
+    <div class="panel-head"><h2>Встречи по сотрудникам</h2></div>
+    {% set max_total = (per_user | map(attribute='total') | max) if per_user else 0 %}
+    <div class="table-wrap">
+      <table class="data">
+        <thead>
+          <tr><th>Сотрудник</th><th class="num">Всего</th><th class="num">План</th><th class="num">Провед.</th><th class="num">Отмен.</th><th>Загрузка</th></tr>
+        </thead>
+        <tbody>
+          {% for r in per_user %}
+          <tr>
+            <td>
+              <strong>{{ r.full_name }}</strong>
+              {% if r.role == 'admin' %}<span class="badge badge-admin" style="margin-left:6px;">admin</span>{% endif %}
+              <div class="muted" style="font-size:12px;">{{ r.email }}</div>
+            </td>
+            <td class="num">{{ r.total }}</td>
+            <td class="num">{{ r.planned }}</td>
+            <td class="num">{{ r.completed }}</td>
+            <td class="num">{{ r.cancelled }}</td>
+            <td style="min-width:120px;">
+              <div class="bar"><span style="width: {{ ((r.total / max_total * 100) if max_total else 0) | round(0, 'floor') }}%;"></span></div>
+            </td>
+          </tr>
+          {% endfor %}
+          {% if not per_user %}<tr><td colspan="6" class="muted">Нет данных</td></tr>{% endif %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <div>
+    <section class="panel glass" style="margin-bottom:18px;">
+      <div class="panel-head"><h2>Статусы встреч</h2></div>
+      {% set total_status = status_counts.planned + status_counts.completed + status_counts.cancelled %}
+      {% for key, label, cls in [('planned','Запланированы','chip'), ('completed','Проведены','chip green'), ('cancelled','Отменены','chip red')] %}
+      <div style="margin-bottom:14px;">
+        <div class="flex between items-center" style="margin-bottom:6px;">
+          <span class="{{ cls }}">{{ label }}</span>
+          <strong>{{ status_counts[key] }}</strong>
+        </div>
+        <div class="bar"><span style="width: {{ ((status_counts[key] / total_status * 100) if total_status else 0) | round(0, 'floor') }}%;"></span></div>
+      </div>
+      {% endfor %}
+    </section>
+
+    <section class="panel glass">
+      <div class="panel-head"><h2>Журнал аудита</h2><span class="muted">последние {{ audit | length }}</span></div>
+      <div class="table-wrap" style="max-height:300px; overflow-y:auto;">
+        <table class="data">
+          <thead><tr><th>Время</th><th>Кто</th><th>Действие</th><th>Объект</th></tr></thead>
+          <tbody>
+            {% for a in audit %}
+            <tr>
+              <td class="muted nowrap">{{ a.created_at.strftime('%d.%m %H:%M') }}</td>
+              <td>{{ user_map.get(a.actor_user_id, '—') }}</td>
+              <td><span class="chip gray">{{ a.action }}</span></td>
+              <td class="muted">{{ a.entity_type }}{% if a.entity_id %}#{{ a.entity_id }}{% endif %}</td>
+            </tr>
+            {% endfor %}
+            {% if not audit %}<tr><td colspan="4" class="muted">Записей нет</td></tr>{% endif %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}

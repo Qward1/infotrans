@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}Настройки · {{ app_name }}{% endblock %}
+{% block page_title %}Настройки{% endblock %}
+{% block page_subtitle %}Конфигурация приложения · {{ config_path }}{% endblock %}
+
+{% block content %}
+{% if saved %}
+<div class="alert info">✅ Настройки сохранены. Создан backup <code>config.yaml.bak</code>. Изменения применены без перезапуска.</div>
+{% endif %}
+<div class="alert info">
+  Все настройки хранятся в <code>config/config.yaml</code> (без <code>.env</code>). Секреты и API-ключи на этой странице замаскированы.
+  {% if not is_admin %}Редактирование доступно администраторам.{% endif %}
+</div>
+
+<div class="grid cols-2">
+  <section class="panel glass">
+    <div class="panel-head"><h2>Приложение</h2></div>
+    <table class="data">
+      <tbody>
+        <tr><td class="muted">Название</td><td class="right">{{ safe.app.name }}</td></tr>
+        <tr><td class="muted">Часовой пояс</td><td class="right">{{ safe.app.timezone }}</td></tr>
+        <tr><td class="muted">Debug</td><td class="right">{{ 'вкл' if safe.app.debug else 'выкл' }}</td></tr>
+        <tr><td class="muted">Secret key</td><td class="right"><code>{{ safe.app.secret_key }}</code></td></tr>
+        <tr><td class="muted">База данных</td><td class="right"><code>{{ safe.database.url }}</code></td></tr>
+      </tbody>
+    </table>
+
+    <div class="panel-head" style="margin-top:20px;"><h2>Планирование</h2></div>
+    <table class="data">
+      <tbody>
+        <tr><td class="muted">Рабочие часы</td><td class="right">{{ safe.scheduling.working_hours }}</td></tr>
+        <tr><td class="muted">Длительность встречи по умолчанию</td><td class="right">{{ safe.scheduling.default_meeting_minutes }} мин</td></tr>
+        <tr><td class="muted">Буфер на дорогу по умолчанию</td><td class="right">{{ safe.scheduling.default_travel_buffer_minutes }} мин</td></tr>
+        <tr><td class="muted">Порог высокого приоритета</td><td class="right">{{ safe.scheduling.high_priority_threshold }}</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="panel glass">
+    <div class="panel-head"><h2>Ассистент</h2></div>
+    <table class="data">
+      <tbody>
+        <tr><td class="muted">Dify включён</td><td class="right">
+          {% if safe.assistant.dify_enabled %}<span class="badge badge-hybrid">включён</span>{% else %}<span class="badge badge-user">выключен</span>{% endif %}</td></tr>
+        <tr><td class="muted">Dify URL</td><td class="right"><code>{{ safe.assistant.dify_base_url }}</code></td></tr>
+        <tr><td class="muted">Dify API-ключ</td><td class="right"><code>{{ safe.assistant.dify_api_key }}</code></td></tr>
+        <tr><td class="muted">Dify ассистент</td><td class="right">{{ safe.assistant.dify_assistant }}</td></tr>
+        <tr><td class="muted">LLM включён</td><td class="right">{{ 'вкл' if safe.assistant.llm_enabled else 'выкл' }}</td></tr>
+        <tr><td class="muted">LLM модель</td><td class="right">{{ safe.assistant.llm_model }}</td></tr>
+      </tbody>
+    </table>
+
+    <div class="panel-head" style="margin-top:20px;"><h2>Провайдеры и уведомления</h2></div>
+    <table class="data">
+      <tbody>
+        <tr><td class="muted">Билеты: режим</td><td class="right"><span class="chip">{{ safe.tickets.mode }}</span></td></tr>
+        <tr><td class="muted">Билеты: провайдер</td><td class="right">{{ safe.tickets.provider }}</td></tr>
+        <tr><td class="muted">Валюта</td><td class="right">{{ safe.tickets.currency }}</td></tr>
+        <tr><td class="muted">Уведомления: режим</td><td class="right"><span class="chip">{{ safe.notifications.mode }}</span></td></tr>
+        <tr><td class="muted">Канал по умолчанию</td><td class="right">{{ safe.notifications.default_channel }}</td></tr>
+        <tr><td class="muted">Каналы</td><td class="right">
+          {% for c in safe.notifications.channels %}<span class="badge badge-user">{{ c }}</span> {% endfor %}</td></tr>
+        <tr><td class="muted">Мессенджер</td><td class="right">{{ 'вкл' if safe.notifications.messenger_enabled else 'выкл' }} · {{ safe.notifications.messenger_provider }}</td></tr>
+      </tbody>
+    </table>
+  </section>
+</div>
+
+{% if is_admin %}
+<section class="panel glass" style="margin-top:18px;">
+  <div class="panel-head">
+    <h2>Редактирование <span class="muted" style="font-weight:500;">(безопасный whitelist)</span></h2>
+  </div>
+  <p class="muted" style="margin-top:0;">
+    Секреты и БД не редактируются здесь. Перед сохранением создаётся backup <code>config.yaml.bak</code>.
+  </p>
+  <form method="post" action="/settings">
+    <div class="form-row">
+      <div class="field">
+        <label>Название приложения</label>
+        <input name="app_name" value="{{ safe.app.name }}" required />
+      </div>
+      <div class="field">
+        <label>Часовой пояс</label>
+        <input name="timezone" value="{{ safe.app.timezone }}" required />
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="field">
+        <label>Начало рабочего дня</label>
+        <input name="wh_start" value="{{ safe.scheduling.wh_start }}" placeholder="09:00" required />
+      </div>
+      <div class="field">
+        <label>Конец рабочего дня</label>
+        <input name="wh_end" value="{{ safe.scheduling.wh_end }}" placeholder="19:00" required />
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="field">
+        <label>Длительность встречи по умолчанию, мин</label>
+        <input name="default_meeting_minutes" type="number" min="15" max="600" value="{{ safe.scheduling.default_meeting_minutes }}" required />
+      </div>
+      <div class="field">
+        <label>Буфер на дорогу по умолчанию, мин</label>
+        <input name="default_travel_buffer_minutes" type="number" min="0" max="600" value="{{ safe.scheduling.default_travel_buffer_minutes }}" required />
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="field">
+        <label>Канал уведомлений по умолчанию</label>
+        <select name="default_channel">
+          {% for c in ['messenger', 'web', 'email'] %}
+          <option value="{{ c }}" {{ 'selected' if safe.notifications.default_channel == c }}>{{ c }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label>Dify base_url</label>
+        <input name="dify_base_url" value="{{ safe.assistant.dify_base_url }}" />
+      </div>
+    </div>
+    <div class="field">
+      <label class="check"><input type="checkbox" name="dify_enabled" {{ 'checked' if safe.assistant.dify_enabled }} /> Включить Dify (иначе — локальный нормализатор)</label>
+    </div>
+    <div class="modal-foot">
+      <button type="submit" class="btn primary">Сохранить настройки</button>
+    </div>
+  </form>
+</section>
+{% endif %}
+{% endblock %}
