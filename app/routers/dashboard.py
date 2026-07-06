@@ -4,11 +4,11 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.permissions import get_current_user_optional, require_user
+from app.core.urls import local_redirect
 from app.models.user import User
 from app.services import calendar as calendar_service
 from app.services import scheduling as scheduling_service
@@ -21,8 +21,8 @@ router = APIRouter(tags=["dashboard"])
 def index(request: Request, db: Session = Depends(get_db)):
     user = get_current_user_optional(request, db)
     if user is None:
-        return RedirectResponse("/login", status_code=303)
-    return RedirectResponse("/dashboard", status_code=303)
+        return local_redirect(request, "/login")
+    return local_redirect(request, "/dashboard")
 
 
 _WEEKDAY_NAMES = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]

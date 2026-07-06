@@ -11,10 +11,10 @@ import shutil
 
 import yaml
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import RedirectResponse
 
 from app.core.config import CONFIG_PATH, get_settings
 from app.core.permissions import require_admin, require_user
+from app.core.urls import local_redirect
 from app.models.user import User
 from app.templating import render
 
@@ -138,4 +138,4 @@ def settings_save(
         (["assistant", "dify", "base_url"], dify_base_url.strip() or "https://api.dify.ai/v1"),
     ]
     _save_config(updates)
-    return RedirectResponse("/settings?saved=1", status_code=303)
+    return local_redirect(request, "/settings?saved=1")

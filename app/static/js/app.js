@@ -5,6 +5,11 @@
 (function () {
   "use strict";
 
+  /* -------- Базовый префикс пути (reverse-proxy под под-путём) -------- */
+  // Все fetch-запросы к бэкенду идут как BASE + "/api/...".
+  const BASE = (window.APP_BASE || "").replace(/\/+$/, "");
+  window.APP_BASE = BASE;
+
   /* ----------------------------- Тема ----------------------------- */
   const THEME_KEY = "smartcal-theme";
   function applyTheme(theme) {
@@ -49,7 +54,9 @@
       opts.headers["Content-Type"] = "application/json";
       opts.body = JSON.stringify(body);
     }
-    const res = await fetch(url, opts);
+    // Префиксуем относительные пути базовым префиксом (reverse-proxy).
+    const target = url.charAt(0) === "/" ? BASE + url : url;
+    const res = await fetch(target, opts);
     if (res.status === 204) return null;
     let data = null;
     try { data = await res.json(); } catch (e) { /* no body */ }
@@ -401,7 +408,7 @@
         const fd = new FormData();
         fd.append("file", file);
         try {
-          const res = await fetch("/chat/upload", { method: "POST", body: fd });
+          const res = await fetch(BASE + "/chat/upload", { method: "POST", body: fd });
           const data = await res.json();
           typing.remove();
           if ((data.warnings || []).length) data.warnings = data.warnings;
@@ -623,7 +630,7 @@
       const fd = new FormData();
       fd.append("file", file);
       try {
-        const res = await fetch("/chat/upload", { method: "POST", body: fd });
+        const res = await fetch(BASE + "/chat/upload", { method: "POST", body: fd });
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || "Ошибка загрузки");
         renderProtocol(data);

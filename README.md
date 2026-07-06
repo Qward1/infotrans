@@ -175,6 +175,17 @@ ARCHITECTURE.md        # архитектура: backend/frontend/db/assistant/D
 
 - `config/config.yaml` — в `.gitignore`; `config/config.example.yaml` — в репозитории.
   Путь можно переопределить переменной окружения `SMARTCAL_CONFIG`.
+
+- **За reverse-proxy под под-путём** (например, `https://host/jnserver/1120/application`):
+  укажите префикс, чтобы ссылки/статика/редиректы строились правильно:
+
+  ```yaml
+  app:
+    root_path: "/jnserver/1120/application"   # в корне — оставьте ""
+  ```
+
+  Заголовок `X-Forwarded-Prefix` от прокси имеет приоритет над этим значением.
+  Работает и когда прокси срезает префикс, и когда пробрасывает полный путь.
 - **Правка настроек через UI** (`/settings`, admin): безопасный whitelist скалярных полей;
   секреты не показываются и не редактируются; перед записью создаётся `config.yaml.bak`.
 

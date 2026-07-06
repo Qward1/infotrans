@@ -4,9 +4,10 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Вход · {{ app_name }}</title>
-  <link rel="stylesheet" href="/static/css/app.css" />
+  <link rel="stylesheet" href="{{ base }}/static/css/app.css" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%97%93%EF%B8%8F%3C/text%3E%3C/svg%3E" />
   <script>
+    window.APP_BASE = "{{ base }}";
     (function () {
       var t = localStorage.getItem("smartcal-theme") || "light";
       document.documentElement.setAttribute("data-theme", t);
@@ -27,7 +28,7 @@
       <div class="alert error">{{ error }}</div>
       {% endif %}
 
-      <form method="post" action="/login" autocomplete="on">
+      <form method="post" action="{{ base }}/login" autocomplete="on">
         <div class="field">
           <label for="email">Email</label>
           <input id="email" name="email" type="email" required autofocus
@@ -54,6 +55,6 @@
   <div style="position:fixed; right:18px; top:18px;">
     <button class="btn icon theme-toggle" onclick="toggleTheme()" aria-label="Сменить тему">🌙</button>
   </div>
-  <script src="/static/js/app.js" defer></script>
+  <script src="{{ base }}/static/js/app.js" defer></script>
 </body>
 </html>

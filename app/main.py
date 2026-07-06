@@ -16,6 +16,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from app.bootstrap import bootstrap
 from app.core.config import BASE_DIR, get_settings
 from app.core.permissions import NotAuthenticated, NotAuthorized
+from app.core.urls import local_redirect
 from app.routers import (
     admin,
     api,
@@ -47,6 +48,9 @@ app = FastAPI(
     description="Умный цифровой календарь встреч и поездок (MVP).",
     version="0.1.0",
     lifespan=lifespan,
+    # Префикс пути за reverse-proxy (пусто → корень). Заголовок X-Forwarded-Prefix
+    # имеет приоритет (см. app/core/urls.py).
+    root_path=settings.app.root_path,
 )
 
 # Сессии на подписанных cookie (секрет — из YAML).
@@ -70,7 +74,7 @@ app.mount("/static", StaticFiles(directory=str(BASE_DIR / "app" / "static")), na
 async def _not_authenticated(request: Request, exc: NotAuthenticated):
     if request.url.path.startswith("/api"):
         return JSONResponse(status_code=401, content={"detail": "Требуется вход"})
-    return RedirectResponse(url="/login", status_code=303)
+    return local_redirect(request, "/login", status_code=303)
 
 
 @app.exception_handler(NotAuthorized)

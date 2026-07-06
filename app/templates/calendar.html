@@ -12,9 +12,9 @@
 {% block content %}
 <div class="cal-toolbar glass panel">
   <div class="flex items-center gap-8">
-    <a class="btn small ghost" href="/calendar?week={{ prev_week }}">‹ Назад</a>
-    <a class="btn small" href="/calendar?week={{ this_week }}">Сегодня</a>
-    <a class="btn small ghost" href="/calendar?week={{ next_week }}">Вперёд ›</a>
+    <a class="btn small ghost" href="{{ base }}/calendar?week={{ prev_week }}">‹ Назад</a>
+    <a class="btn small" href="{{ base }}/calendar?week={{ this_week }}">Сегодня</a>
+    <a class="btn small ghost" href="{{ base }}/calendar?week={{ next_week }}">Вперёд ›</a>
   </div>
   <div class="cal-range">{{ week_start.strftime('%d.%m.%Y') }} — {{ week_end.strftime('%d.%m.%Y') }}</div>
   <div class="flex items-center gap-12 wrap">

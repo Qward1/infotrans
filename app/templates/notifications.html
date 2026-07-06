@@ -40,7 +40,7 @@
           </td>
           <td>
             {% if it.related %}
-              <a href="/calendar">{{ it.related.title }}</a>
+              <a href="{{ base }}/calendar">{{ it.related.title }}</a>
               <div class="muted" style="font-size:12px;">{{ it.related.start_at.strftime('%d.%m %H:%M') }}</div>
             {% else %}<span class="muted">—</span>{% endif %}
           </td>

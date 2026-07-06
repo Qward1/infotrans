@@ -29,6 +29,10 @@ class AppConfig(BaseModel):
     secret_key: str = "insecure-dev-secret-change-me"
     timezone: str = "Europe/Moscow"
     debug: bool = True
+    # Префикс пути, если приложение развёрнуто за reverse-proxy под под-путём
+    # (например, "/jnserver/1120/application"). Пусто → приложение в корне.
+    # Заголовок X-Forwarded-Prefix от прокси имеет приоритет над этим значением.
+    root_path: str = ""
 
 
 class DatabaseConfig(BaseModel):

@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Нет доступа · {{ app_name }}</title>
-  <link rel="stylesheet" href="/static/css/app.css" />
+  <link rel="stylesheet" href="{{ base }}/static/css/app.css" />
   <script>
     (function () {
       var t = localStorage.getItem("smartcal-theme") || "light";
@@ -19,7 +19,7 @@
         <div class="big">🔒</div>
         <h1>403 · Недостаточно прав</h1>
         <p class="muted">Эта страница доступна только администраторам.</p>
-        <a href="/dashboard" class="btn primary" style="margin-top:10px;">На дашборд</a>
+        <a href="{{ base }}/dashboard" class="btn primary" style="margin-top:10px;">На дашборд</a>
       </div>
     </div>
   </div>

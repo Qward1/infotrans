@@ -40,10 +40,10 @@
   <div class="panel-head"><h2>Быстрые действия</h2></div>
   <div class="quick-actions">
     <a class="qa" data-new-event><span class="qa-ic">➕</span><span class="qa-label">Создать встречу</span></a>
-    <a class="qa" href="/chat"><span class="qa-ic">💬</span><span class="qa-label">Чат-секретарь</span></a>
-    <a class="qa" href="/chat" data-suggest-link="Когда я свободен на этой неделе на 30 минут?"><span class="qa-ic">🟢</span><span class="qa-label">Свободный слот</span></a>
-    <a class="qa" href="/documents"><span class="qa-ic">📄</span><span class="qa-label">Загрузить протокол</span></a>
-    <a class="qa" href="/travel"><span class="qa-ic">🎫</span><span class="qa-label">Найти билеты</span></a>
+    <a class="qa" href="{{ base }}/chat"><span class="qa-ic">💬</span><span class="qa-label">Чат-секретарь</span></a>
+    <a class="qa" href="{{ base }}/chat" data-suggest-link="Когда я свободен на этой неделе на 30 минут?"><span class="qa-ic">🟢</span><span class="qa-label">Свободный слот</span></a>
+    <a class="qa" href="{{ base }}/documents"><span class="qa-ic">📄</span><span class="qa-label">Загрузить протокол</span></a>
+    <a class="qa" href="{{ base }}/travel"><span class="qa-ic">🎫</span><span class="qa-label">Найти билеты</span></a>
   </div>
 </section>
 
@@ -52,7 +52,7 @@
     <section class="panel glass" style="margin-bottom:18px;">
       <div class="panel-head">
         <h2>Встречи сегодня</h2>
-        <a href="/calendar" class="btn small ghost">Календарь</a>
+        <a href="{{ base }}/calendar" class="btn small ghost">Календарь</a>
       </div>
       {% if today_events %}
         {% for e in today_events %}{{ m.event_row(e) }}{% endfor %}
@@ -80,7 +80,7 @@
     <section class="panel glass" style="margin-bottom:18px;">
       <div class="panel-head">
         <h2>Ближайшие встречи</h2>
-        <a href="/calendar" class="btn small ghost">Открыть календарь</a>
+        <a href="{{ base }}/calendar" class="btn small ghost">Открыть календарь</a>
       </div>
       {% if upcoming %}
         {% for e in upcoming %}{{ m.event_row(e) }}{% endfor %}

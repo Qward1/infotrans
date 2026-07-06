@@ -13,6 +13,10 @@ app:
   # Часовой пояс по умолчанию для новых событий.
   timezone: "Europe/Moscow"
   debug: true
+  # Префикс пути, если приложение стоит за reverse-proxy под под-путём
+  # (например, "/jnserver/1120/application"). В корне — оставьте "".
+  # Заголовок X-Forwarded-Prefix от прокси имеет приоритет.
+  root_path: ""
 
 database:
   # Любой SQLAlchemy URL. По умолчанию — локальный SQLite.

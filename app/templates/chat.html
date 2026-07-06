@@ -51,7 +51,7 @@
       <h3>Режим</h3>
       <div class="hint">
         Ассистент: <strong>{{ assistant_mode }}</strong><br />
-        {% if assistant_mode == 'local' %}Работает локальный нормализатор (без внешних ключей). Dify включается в <a href="/settings">настройках</a>.{% else %}Запросы идут в Dify с fallback на локальный режим.{% endif %}
+        {% if assistant_mode == 'local' %}Работает локальный нормализатор (без внешних ключей). Dify включается в <a href="{{ base }}/settings">настройках</a>.{% else %}Запросы идут в Dify с fallback на локальный режим.{% endif %}
       </div>
     </div>
   </aside>

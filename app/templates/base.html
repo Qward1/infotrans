@@ -4,9 +4,11 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{% block title %}{{ app_name }}{% endblock %}</title>
-  <link rel="stylesheet" href="/static/css/app.css" />
+  <link rel="stylesheet" href="{{ base }}/static/css/app.css" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%97%93%EF%B8%8F%3C/text%3E%3C/svg%3E" />
   <script>
+    // Базовый префикс пути (reverse-proxy) — используется fetch-запросами в app.js.
+    window.APP_BASE = "{{ base }}";
     // Применяем тему до отрисовки, чтобы не было «мигания».
     (function () {
       var t = localStorage.getItem("smartcal-theme") || "light";
@@ -27,23 +29,23 @@
 
       <nav class="nav">
         <div class="nav-section">Рабочее место</div>
-        <a href="/dashboard" class="{{ 'active' if active == 'dashboard' }}"><span class="ic">🏠</span> Дашборд</a>
-        <a href="/calendar" class="{{ 'active' if active == 'calendar' }}"><span class="ic">📆</span> Календарь</a>
-        <a href="/chat" class="{{ 'active' if active == 'chat' }}"><span class="ic">💬</span> Ассистент</a>
+        <a href="{{ base }}/dashboard" class="{{ 'active' if active == 'dashboard' }}"><span class="ic">🏠</span> Дашборд</a>
+        <a href="{{ base }}/calendar" class="{{ 'active' if active == 'calendar' }}"><span class="ic">📆</span> Календарь</a>
+        <a href="{{ base }}/chat" class="{{ 'active' if active == 'chat' }}"><span class="ic">💬</span> Ассистент</a>
 
         <div class="nav-section">Инструменты</div>
-        <a href="/documents" class="{{ 'active' if active == 'documents' }}"><span class="ic">📄</span> Документы</a>
-        <a href="/travel" class="{{ 'active' if active == 'travel' }}"><span class="ic">🎫</span> Билеты</a>
-        <a href="/notifications" class="{{ 'active' if active == 'notifications' }}"><span class="ic">🔔</span> Уведомления</a>
+        <a href="{{ base }}/documents" class="{{ 'active' if active == 'documents' }}"><span class="ic">📄</span> Документы</a>
+        <a href="{{ base }}/travel" class="{{ 'active' if active == 'travel' }}"><span class="ic">🎫</span> Билеты</a>
+        <a href="{{ base }}/notifications" class="{{ 'active' if active == 'notifications' }}"><span class="ic">🔔</span> Уведомления</a>
 
         {% if current_user and current_user.is_admin %}
         <div class="nav-section">Администрирование</div>
-        <a href="/admin/users" class="{{ 'active' if active == 'admin_users' }}"><span class="ic">👥</span> Пользователи</a>
-        <a href="/admin/stats" class="{{ 'active' if active == 'admin_stats' }}"><span class="ic">📊</span> Статистика</a>
+        <a href="{{ base }}/admin/users" class="{{ 'active' if active == 'admin_users' }}"><span class="ic">👥</span> Пользователи</a>
+        <a href="{{ base }}/admin/stats" class="{{ 'active' if active == 'admin_stats' }}"><span class="ic">📊</span> Статистика</a>
         {% endif %}
 
         <div class="nav-section">Система</div>
-        <a href="/settings" class="{{ 'active' if active == 'settings' }}"><span class="ic">⚙️</span> Настройки</a>
+        <a href="{{ base }}/settings" class="{{ 'active' if active == 'settings' }}"><span class="ic">⚙️</span> Настройки</a>
       </nav>
 
       <div class="sidebar-footer">
@@ -57,7 +59,7 @@
             </div>
           </div>
         </div>
-        <a href="/logout" class="btn ghost small" style="width:100%; justify-content:center; margin-top:8px;">Выйти</a>
+        <a href="{{ base }}/logout" class="btn ghost small" style="width:100%; justify-content:center; margin-top:8px;">Выйти</a>
         {% endif %}
       </div>
     </aside>
@@ -94,7 +96,7 @@
   </div>
 
   <div class="toast-wrap"></div>
-  <script src="/static/js/app.js" defer></script>
+  <script src="{{ base }}/static/js/app.js" defer></script>
   {% block extra_js %}{% endblock %}
 </body>
 </html>
