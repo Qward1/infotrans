@@ -43,8 +43,10 @@ class EventBase(BaseModel):
 
 
 class EventCreate(EventBase):
+    owner_id: int | None = None
     status: str = STATUS_PLANNED
     source: str = SOURCE_MANUAL
+    participants: list[str] = Field(default_factory=list)
 
     @field_validator("status")
     @classmethod
@@ -76,6 +78,7 @@ class EventUpdate(BaseModel):
     importance: str | None = None
     priority: int | None = Field(default=None, ge=0, le=10)
     status: str | None = None
+    participants: list[str] | None = None
 
     @field_validator("location_type")
     @classmethod
@@ -108,6 +111,8 @@ class EventOut(BaseModel):
     importance: str
     priority: int
     owner_id: int
+    created_by_id: int | None = None
+    updated_by_id: int | None = None
     status: str
     source: str
     created_at: datetime

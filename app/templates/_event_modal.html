@@ -7,6 +7,8 @@
     </div>
     <form>
       <input type="hidden" name="id" />
+      <input type="hidden" name="owner_id" />
+      <div class="alert info" id="event-owner-note" style="display:none;"></div>
       <div class="field">
         <label>Название</label>
         <input name="title" required maxlength="255" placeholder="Например: Встреча с подрядчиком" />
@@ -46,6 +48,10 @@
       <div class="field">
         <label>Ссылка на встречу</label>
         <input name="meeting_url" placeholder="https://meet.example.com/..." />
+      </div>
+      <div class="field">
+        <label>Участники</label>
+        <input name="participants" placeholder="email участников через запятую" />
       </div>
       <div class="form-row">
         <div class="field">

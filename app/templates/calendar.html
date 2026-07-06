@@ -1,8 +1,7 @@
 {% extends "base.html" %}
-{% import "_macros.html" as m %}
 {% block title %}Календарь · {{ app_name }}{% endblock %}
 {% block page_title %}Календарь{% endblock %}
-{% block page_subtitle %}Неделя {{ week_start.strftime('%d.%m') }} — {{ week_end.strftime('%d.%m.%Y') }}{% endblock %}
+{% block page_subtitle %}<span id="calendar-subtitle">{{ calendar_payload.label }}</span>{% endblock %}
 
 {% block topbar_actions %}
 <button class="btn ghost" id="find-slot-btn">🟢 Свободный слот</button>
@@ -10,54 +9,70 @@
 {% endblock %}
 
 {% block content %}
-<div class="cal-toolbar glass panel">
-  <div class="flex items-center gap-8">
-    <a class="btn small ghost" href="{{ base }}/calendar?week={{ prev_week }}">‹ Назад</a>
-    <a class="btn small" href="{{ base }}/calendar?week={{ this_week }}">Сегодня</a>
-    <a class="btn small ghost" href="{{ base }}/calendar?week={{ next_week }}">Вперёд ›</a>
+{% if current_user.is_admin %}
+<section class="admin-calendar-switch glass panel" id="admin-calendar-switch">
+  <div class="admin-calendar-current">
+    <span class="badge badge-admin">admin view</span>
+    <strong id="calendar-owner-label">
+      {% if calendar_payload.owner.is_current_user %}
+        Свой календарь
+      {% else %}
+        Календарь: {{ calendar_payload.owner.full_name }}
+      {% endif %}
+    </strong>
+    <span class="a-muted">{{ calendar_payload.owner.email }}</span>
+    {% if not calendar_payload.owner.is_current_user %}
+      <a class="btn small ghost" href="{{ base }}/calendar?view={{ calendar_payload.view }}&date={{ calendar_payload.date }}">Вернуться к своему</a>
+    {% endif %}
   </div>
-  <div class="cal-range">{{ week_start.strftime('%d.%m.%Y') }} — {{ week_end.strftime('%d.%m.%Y') }}</div>
+  <div class="admin-calendar-search">
+    <input id="calendar-user-search" placeholder="Поиск сотрудника по имени или email" autocomplete="off" />
+    <div class="admin-user-list" id="calendar-user-list">
+      {% for u in calendar_users %}
+      <a
+        class="admin-user-pill {{ 'active' if u.id == calendar_payload.owner.id else '' }}"
+        data-user-name="{{ (u.full_name or u.email) | lower }}"
+        data-user-email="{{ u.email | lower }}"
+        href="{{ base }}/calendar?user_id={{ u.id }}&view={{ calendar_payload.view }}&date={{ calendar_payload.date }}"
+      >
+        <span>{{ u.full_name or u.email }}</span>
+        <small>{{ u.email }}</small>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endif %}
+
+{% if calendar_payload.admin_view %}
+<div class="alert info">Вы редактируете календарь: {{ calendar_payload.owner.full_name }} · {{ calendar_payload.owner.email }}</div>
+{% endif %}
+
+<section class="cal-toolbar glass panel" id="calendar-app">
+  <div class="flex items-center gap-8 wrap">
+    <button type="button" class="btn small ghost" data-cal-nav="prev">‹ Назад</button>
+    <button type="button" class="btn small" data-cal-nav="today">Сегодня</button>
+    <button type="button" class="btn small ghost" data-cal-nav="next">Вперёд ›</button>
+  </div>
+
+  <div class="cal-range" id="calendar-range">{{ calendar_payload.label }}</div>
+
+  <div class="view-switch" role="group" aria-label="Вид календаря">
+    <button type="button" class="btn small {{ 'primary' if calendar_payload.view == 'day' else 'ghost' }}" data-cal-view="day">Day</button>
+    <button type="button" class="btn small {{ 'primary' if calendar_payload.view == 'week' else 'ghost' }}" data-cal-view="week">Week</button>
+    <button type="button" class="btn small {{ 'primary' if calendar_payload.view == 'month' else 'ghost' }}" data-cal-view="month">Month</button>
+  </div>
+
   <div class="flex items-center gap-12 wrap">
     <span class="badge badge-online">● Онлайн</span>
     <span class="badge badge-offline">● Очно</span>
     <span class="badge badge-hybrid">● Гибрид</span>
-    <span class="muted nowrap">клик по встрече — редактировать</span>
+    <span class="muted nowrap">TZ: {{ calendar_payload.timezone }}</span>
   </div>
-</div>
+</section>
 
-<div class="week-grid" style="margin-top:16px;">
-  {% set dows = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'] %}
-  {% for day in days %}
-  <div class="day-col glass {{ 'today' if day.date.date() == now_date }}">
-    <div class="day-head">
-      <span class="dow">{{ dows[loop.index0] }}</span>
-      <span class="dnum">{{ day.date.strftime('%d') }}</span>
-    </div>
-    <span class="day-add" data-new-event data-day="{{ day.date.strftime('%Y-%m-%d') }}">＋ добавить</span>
-
-    {% if day.events %}
-      {% for e in day.events %}
-      <div class="cal-event p-{{ 'critical' if e.priority >= 9 else 'high' if e.priority >= 7 else 'mid' if e.priority >= 4 else 'low' }} {{ 'cancelled' if e.status == 'cancelled' }} {{ 'conflict' if e.id in conflict_ids }}"
-           data-event='{{ m.event_payload(e) }}' role="button" tabindex="0"
-           title="{{ e.title }} · приоритет {{ e.priority }}{% if e.id in conflict_ids %} · конфликт{% endif %}">
-        <div class="ce-time">{{ e.start_at.strftime('%H:%M') }}–{{ e.end_at.strftime('%H:%M') }}</div>
-        <div class="ce-title">{{ e.title }}</div>
-        <div class="ce-loc">
-          <span class="dot {{ e.location_type }}"></span>
-          {{ m.loc_label(e) }}{% if e.city %} · {{ e.city }}{% elif e.meeting_url %} · ссылка{% endif %}
-        </div>
-        <div class="ce-badges">
-          {{ m.priority_badge(e.priority) }}
-          {% if e.id in conflict_ids %}<span class="badge conflict-flag">⚠ конфликт</span>{% endif %}
-        </div>
-      </div>
-      {% endfor %}
-    {% else %}
-      <div class="cal-empty">нет встреч</div>
-    {% endif %}
-  </div>
-  {% endfor %}
-</div>
+<div id="calendar-body" style="margin-top:16px;"></div>
+<script type="application/json" id="calendar-initial">{{ calendar_payload | tojson }}</script>
 
 <!-- Модалка поиска свободного слота -->
 <div class="modal-backdrop" id="slot-modal">
@@ -87,11 +102,24 @@
 {% block extra_js %}
 <script>
   document.addEventListener("DOMContentLoaded", function () {
+    var payloadNode = document.getElementById("calendar-initial");
+    var calendarPayload = payloadNode ? JSON.parse(payloadNode.textContent || "{}") : {};
     var modal = document.getElementById("slot-modal");
     var openBtn = document.getElementById("find-slot-btn");
     var searchBtn = document.getElementById("slot-search");
     var out = document.getElementById("slot-results");
+    var search = document.getElementById("calendar-user-search");
     if (!openBtn) return;
+
+    if (search) {
+      search.addEventListener("input", function () {
+        var q = search.value.trim().toLowerCase();
+        document.querySelectorAll("#calendar-user-list .admin-user-pill").forEach(function (item) {
+          var hay = (item.getAttribute("data-user-name") || "") + " " + (item.getAttribute("data-user-email") || "");
+          item.style.display = !q || hay.indexOf(q) !== -1 ? "" : "none";
+        });
+      });
+    }
 
     openBtn.addEventListener("click", function () { modal.classList.add("open"); });
     modal.addEventListener("click", function (e) { if (e.target === modal) modal.classList.remove("open"); });
@@ -101,14 +129,20 @@
       var days = parseInt(document.getElementById("slot-days").value, 10) || 7;
       out.innerHTML = '<div class="loading"><span class="spinner"></span> Ищу свободные окна…</div>';
       try {
-        var slots = await window.api("GET", "/api/scheduling/free-slots?duration=" + dur + "&days=" + days);
+        var url = "/api/scheduling/free-slots?duration=" + dur + "&days=" + days;
+        if (calendarPayload.owner && !calendarPayload.owner.is_current_user) {
+          url += "&user_id=" + encodeURIComponent(calendarPayload.owner.id);
+        }
+        var slots = await window.api("GET", url);
         if (!slots.length) { out.innerHTML = '<div class="a-muted">Свободных окон не найдено в рабочих часах.</div>'; return; }
         out.innerHTML = slots.slice(0, 12).map(function (s) {
           var start = new Date(s.start_at), end = new Date(s.end_at);
           var label = start.toLocaleString("ru-RU", { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) +
             "–" + end.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+          var take = { start_at: s.start_at, end_at: s.end_at, source: "assistant" };
+          if (calendarPayload.owner) take.owner_id = calendarPayload.owner.id;
           return '<div class="slot-pill"><span>' + label + ' · ' + s.minutes + ' мин</span>' +
-            '<button class="btn small ghost" data-take=\'' + JSON.stringify({ start_at: s.start_at, end_at: s.end_at, source: "assistant" }) + '\'>Занять</button></div>';
+            '<button class="btn small ghost" data-take=\'' + JSON.stringify(take) + '\'>Занять</button></div>';
         }).join("");
         out.querySelectorAll("[data-take]").forEach(function (b) {
           b.addEventListener("click", function () {

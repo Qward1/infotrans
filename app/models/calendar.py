@@ -52,6 +52,12 @@ class CalendarEvent(Base):
     owner_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
     )
+    created_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True, nullable=True
+    )
+    updated_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True, nullable=True
+    )
     status: Mapped[str] = mapped_column(String(16), default=STATUS_PLANNED, nullable=False)
     source: Mapped[str] = mapped_column(String(16), default=SOURCE_MANUAL, nullable=False)
 
@@ -62,7 +68,9 @@ class CalendarEvent(Base):
         DateTime, server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
-    owner = relationship("User", back_populates="events")
+    owner = relationship("User", back_populates="events", foreign_keys=[owner_id])
+    created_by = relationship("User", foreign_keys=[created_by_id])
+    updated_by = relationship("User", foreign_keys=[updated_by_id])
     participants = relationship(
         "EventParticipant", back_populates="event", cascade="all, delete-orphan"
     )

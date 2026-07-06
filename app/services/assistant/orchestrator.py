@@ -32,20 +32,21 @@ from app.models.assistant import (
     AssistantAction,
 )
 from app.models.calendar import STATUS_CANCELLED, CalendarEvent
-from app.models.meeting import EventParticipant
 from app.models.reminder import Reminder
 from app.models.user import User
-from app.schemas.calendar import EventCreate
+from app.schemas.calendar import EventCreate, EventUpdate
 from app.services import audit as audit_service
 from app.services import availability, calendar as calendar_service
 from app.services import conflict_resolver, location_service
 from app.services import users as users_service
 from app.services.assistant import (
+    calendar_context,
     normalizer,
     notification_service,
     protocol_generator,
     travel_search,
 )
+from app.services.assistant.travel_search import TicketSearchError
 from app.services.assistant.schemas import (
     AssistantCard,
     AssistantResult,
@@ -239,6 +240,48 @@ def _prefill_from_nr(nr: NormalizedRequest) -> dict:
     return payload
 
 
+def _employee_options(users: list[User], settings: Settings) -> str:
+    return ", ".join(
+        f"{calendar_context.employee_summary(user, settings)['fullName']} ({user.email})"
+        for user in users
+    )
+
+
+def _resolve_employee_targets(
+    settings: Settings,
+    db: Session,
+    user: User,
+    nr: NormalizedRequest,
+    result: AssistantResult,
+) -> list[User] | None:
+    queries = calendar_context.extract_employee_queries(nr.original_text)
+    if not queries:
+        return []
+
+    targets: list[User] = []
+    for query in queries:
+        try:
+            target = calendar_context.resolve_employee_query(db, settings, user, query)
+        except calendar_context.EmployeeAmbiguous as exc:
+            result.status = "needs_clarification"
+            result.reply = (
+                f"Нашёл несколько сотрудников по запросу «{exc.query}»: "
+                f"{_employee_options(exc.candidates, settings)}. Уточните, кого выбрать."
+            )
+            return None
+        except calendar_context.EmployeeNotFound:
+            result.status = "needs_clarification"
+            result.reply = f"Не нашёл сотрудника «{query}». Уточните имя или email."
+            return None
+        except calendar_context.CalendarAccessDenied:
+            result.status = "error"
+            result.reply = "У вас нет доступа к календарю этого сотрудника."
+            return None
+        if target.id not in {existing.id for existing in targets}:
+            targets.append(target)
+    return targets
+
+
 # --------------------------------------------------------------------------- #
 # Хендлеры интентов                                                            #
 # --------------------------------------------------------------------------- #
@@ -366,6 +409,75 @@ def _build_reschedule_plan(db, settings, conflict, participant_ids) -> dict | No
 def _handle_find_slots(settings, db, user, nr, result, now):
     ev = nr.event
     duration = ev.duration_minutes or settings.scheduling.default_meeting_minutes
+    requested_targets = _resolve_employee_targets(settings, db, user, nr, result)
+    if requested_targets is None:
+        return
+    if requested_targets:
+        requested_range = calendar_context.infer_date_range(nr.original_text, settings, now)
+        availability_items = [
+            calendar_context.employee_availability(
+                db,
+                settings,
+                user,
+                target,
+                requested_range,
+                requested_slot_duration=duration,
+            )
+            for target in requested_targets
+        ]
+        result.status = "done"
+        result.cards.append(
+            AssistantCard(
+                kind="employee_availability",
+                title="Занятость сотрудников",
+                data={"items": availability_items},
+            )
+        )
+        if len(availability_items) == 1:
+            item = availability_items[0]
+            result.alternative_slots = item["availableSlots"]
+            slots_count = len(item["availableSlots"])
+            busy_count = len(item["busyIntervals"])
+            if slots_count:
+                result.reply = (
+                    f"{item['name']}: нашёл {slots_count} свободных окон на {item['requestedRange']['label']} "
+                    f"длительностью от {duration} мин. Занятых интервалов: {busy_count}."
+                )
+                for slot in item["availableSlots"][:3]:
+                    result.suggested_actions.append(
+                        SuggestedAction(
+                            type="create_event",
+                            label=f"Занять {datetime.fromisoformat(slot['start_at']):%d.%m %H:%M}",
+                            style="ghost",
+                            payload={
+                                "owner_id": item["employeeId"],
+                                "start_at": slot["start_at"],
+                                "end_at": slot["end_at"],
+                                "source": "assistant",
+                            },
+                        )
+                    )
+            else:
+                result.reply = (
+                    f"{item['name']}: свободных слотов на {item['requestedRange']['label']} "
+                    f"длительностью {duration} мин не найдено."
+                )
+            return
+
+        lines = []
+        any_slots = False
+        for item in availability_items:
+            count = len(item["availableSlots"])
+            any_slots = any_slots or count > 0
+            lines.append(f"• {item['name']}: свободных окон {count}, занятых интервалов {len(item['busyIntervals'])}")
+        result.reply = (
+            f"Проверил занятость на {availability_items[0]['requestedRange']['label']} "
+            f"(слот от {duration} мин):\n" + "\n".join(lines)
+        )
+        if not any_slots:
+            result.reply += "\nСвободных слотов не найдено."
+        return
+
     participant_ids, unresolved = _resolve_participant_ids(db, ev.participants)
     all_ids = list(dict.fromkeys([user.id, *participant_ids]))
     if unresolved:
@@ -401,8 +513,47 @@ def _handle_find_slots(settings, db, user, nr, result, now):
 def _handle_find_tickets(settings, db, user, nr, result, now):
     tr = nr.travel
     depart = datetime.combine(tr.departure_date, datetime.min.time()) if tr.departure_date else None
-    options = travel_search.search(settings, tr.origin_city or "", tr.destination_city or "",
-                                   depart, tr.transport_type)
+    ret = datetime.combine(tr.return_date, datetime.min.time()) if tr.return_date else None
+    if settings.tickets.mode == "sites":
+        try:
+            params = travel_search.build_params(
+                tr.origin_city or "",
+                tr.destination_city or "",
+                depart,
+                tr.transport_type,
+                return_date=ret,
+                preferences=tr.preferences,
+            )
+            sources = [link.to_dict() for link in travel_search.external_search_links(params)]
+        except TicketSearchError as exc:
+            result.status = "error"
+            result.reply = f"Не удалось подготовить поиск билетов: {exc}"
+            return
+        result.status = "done"
+        result.reply = (
+            f"Подготовил поиск {tr.origin_city} → {tr.destination_city}"
+            + (f" на {tr.departure_date:%d.%m}" if tr.departure_date else "")
+            + ". Откройте подходящий сайт — актуальные цены и места будут там."
+        )
+        result.cards.append(AssistantCard(kind="travel_sources", title="Поиск на сайтах", data={"sources": sources}))
+        audit_service.record(db, actor_user_id=user.id, action="search_tickets", entity_type="travel",
+                             payload={"origin": tr.origin_city, "destination": tr.destination_city,
+                                      "source_mode": "sites", "count": len(sources)})
+        return
+    try:
+        options = travel_search.search(
+            settings,
+            tr.origin_city or "",
+            tr.destination_city or "",
+            depart,
+            tr.transport_type,
+            return_date=ret,
+            preferences=tr.preferences,
+        )
+    except TicketSearchError as exc:
+        result.status = "error"
+        result.reply = f"Не удалось выполнить поиск билетов: {exc}"
+        return
     options = options[:6]
     result.status = "done"
     result.travel_options = [o.model_dump(mode="json") for o in options]
@@ -424,25 +575,44 @@ def _handle_find_tickets(settings, db, user, nr, result, now):
 
 
 def _handle_show_calendar(settings, db, user, nr, result, now):
-    start, end, events = calendar_service.list_week(db, user.id, now)
+    targets = _resolve_employee_targets(settings, db, user, nr, result)
+    if targets is None:
+        return
+    target = targets[0] if targets else user
+    requested_range = calendar_context.infer_date_range(nr.original_text, settings, now)
+    events = calendar_service.list_events_in_range(
+        db,
+        target.id,
+        requested_range.start,
+        requested_range.end,
+        include_cancelled=True,
+    )
     result.status = "done"
-    result.reply = f"На неделе {start:%d.%m}–{(end - timedelta(days=1)):%d.%m} у вас {len(events)} встреч."
+    who = "у вас" if target.id == user.id else f"у {target.full_name or target.email}"
+    result.reply = f"На период {requested_range.label} {who} {len(events)} встреч."
     result.cards.append(AssistantCard(kind="calendar", title="Календарь недели",
-                                       data={"week_start": start.isoformat(),
+                                       data={"week_start": requested_range.start.isoformat(),
+                                             "employee": calendar_context.employee_summary(target, settings),
                                              "events": [_event_out(e) for e in events]}))
 
 
 def _handle_summarize(settings, db, user, nr, result, now):
-    upcoming = calendar_service.upcoming_events(db, user.id, limit=8)
-    conflicts = _pairwise_conflicts(db, user.id, now)
+    targets = _resolve_employee_targets(settings, db, user, nr, result)
+    if targets is None:
+        return
+    target = targets[0] if targets else user
+    upcoming = calendar_service.upcoming_events(db, target.id, limit=8)
+    conflicts = _pairwise_conflicts(db, target.id, now)
     result.status = "done"
     lines = [f"• {e.start_at:%d.%m %H:%M} {e.title}" for e in upcoming[:6]]
+    who = "ваши" if target.id == user.id else f"{target.full_name or target.email}"
     result.reply = (
-        f"Ближайшие встречи ({len(upcoming)}):\n" + "\n".join(lines)
+        f"Ближайшие встречи {who} ({len(upcoming)}):\n" + "\n".join(lines)
         if upcoming else "Ближайших встреч нет."
     )
     result.cards.append(AssistantCard(kind="summary", title="Сводка расписания",
-                                       data={"upcoming": [_event_out(e) for e in upcoming],
+                                       data={"employee": calendar_context.employee_summary(target, settings),
+                                             "upcoming": [_event_out(e) for e in upcoming],
                                              "conflicts": conflicts}))
 
 
@@ -667,14 +837,9 @@ def _create_event_row(db, user, payload: dict, settings) -> CalendarEvent:
         importance=payload.get("importance", "normal"),
         priority=payload.get("priority", 5),
         status="planned", source=payload.get("source", "assistant"),
+        participants=payload.get("participants", []),
     )
-    event = calendar_service.create_event(db, user.id, data)
-    # участники
-    for email in payload.get("participants", []):
-        pu = users_service.get_by_email(db, email)
-        if pu and pu.id != user.id:
-            db.add(EventParticipant(event_id=event.id, user_id=pu.id, role="attendee"))
-    db.commit()
+    event = calendar_service.create_event(db, user.id, data, actor_id=user.id)
     audit_service.record(db, actor_user_id=user.id, action="create_event",
                          entity_type="event", entity_id=event.id, payload={"title": event.title})
     return event
@@ -690,6 +855,11 @@ def _get_action(db, user, action_id) -> AssistantAction | None:
     if action is None or action.user_id != user.id:
         return None
     return action
+
+
+def _ensure_event_mutable(event: CalendarEvent, user: User) -> None:
+    if event.owner_id != user.id and not user.is_admin:
+        raise ValueError("Нет доступа к этому событию")
 
 
 def reject_action(db: Session, user: User, action_id: str) -> dict:
@@ -731,9 +901,16 @@ def confirm_action(db: Session, settings: Settings, user: User, action_id: str) 
             event = calendar_service.get_event(db, payload["event_id"])
             if event is None:
                 raise ValueError("Событие не найдено")
-            event.start_at = datetime.fromisoformat(payload["start_at"])
-            event.end_at = datetime.fromisoformat(payload["end_at"])
-            db.commit(); db.refresh(event)
+            _ensure_event_mutable(event, user)
+            event = calendar_service.update_event(
+                db,
+                event,
+                EventUpdate(
+                    start_at=datetime.fromisoformat(payload["start_at"]),
+                    end_at=datetime.fromisoformat(payload["end_at"]),
+                ),
+                actor_id=user.id,
+            )
             out["updated_event"] = _event_out(event)
             out["message"] = f"Встреча «{event.title}» перенесена на {event.start_at:%d.%m %H:%M}."
             notification_service.notify(db, settings, user,
@@ -744,9 +921,13 @@ def confirm_action(db: Session, settings: Settings, user: User, action_id: str) 
             event = calendar_service.get_event(db, payload["event_id"])
             if event is None:
                 raise ValueError("Событие не найдено")
-            for k, v in (payload.get("fields") or {}).items():
-                setattr(event, k, v)
-            db.commit(); db.refresh(event)
+            _ensure_event_mutable(event, user)
+            event = calendar_service.update_event(
+                db,
+                event,
+                EventUpdate.model_validate(payload.get("fields") or {}),
+                actor_id=user.id,
+            )
             out["updated_event"] = _event_out(event)
             out["message"] = f"Встреча «{event.title}» обновлена."
 
@@ -754,6 +935,7 @@ def confirm_action(db: Session, settings: Settings, user: User, action_id: str) 
             event = calendar_service.get_event(db, payload["event_id"])
             if event is None:
                 raise ValueError("Событие не найдено")
+            _ensure_event_mutable(event, user)
             title = event.title
             calendar_service.delete_event(db, event)
             out["message"] = f"Встреча «{title}» удалена."

@@ -8,7 +8,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from pathlib import Path
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.core.config import BASE_DIR, get_settings
@@ -64,3 +64,32 @@ def init_db() -> None:
     from app import models  # noqa: F401  (регистрация моделей)
 
     Base.metadata.create_all(bind=engine)
+    _run_lightweight_migrations()
+
+
+def _run_lightweight_migrations() -> None:
+    """Минимальные ALTER TABLE для существующих MVP-БД без Alembic."""
+    with engine.begin() as conn:
+        inspector = inspect(conn)
+        table_names = set(inspector.get_table_names())
+        if "calendar_events" not in table_names:
+            return
+        columns = {col["name"] for col in inspector.get_columns("calendar_events")}
+        if "created_by_id" not in columns:
+            conn.execute(text("ALTER TABLE calendar_events ADD COLUMN created_by_id INTEGER"))
+        if "updated_by_id" not in columns:
+            conn.execute(text("ALTER TABLE calendar_events ADD COLUMN updated_by_id INTEGER"))
+        conn.execute(
+            text(
+                "UPDATE calendar_events "
+                "SET created_by_id = owner_id "
+                "WHERE created_by_id IS NULL"
+            )
+        )
+        conn.execute(
+            text(
+                "UPDATE calendar_events "
+                "SET updated_by_id = owner_id "
+                "WHERE updated_by_id IS NULL"
+            )
+        )

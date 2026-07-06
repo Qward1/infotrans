@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Билеты · {{ app_name }}{% endblock %}
 {% block page_title %}Поиск билетов и поездок{% endblock %}
-{% block page_subtitle %}Авиа · ЖД · автобус · режим: {{ tickets_mode }}{% endblock %}
+{% block page_subtitle %}Авиа · ЖД · автобус{% endblock %}
 
 {% block content %}
 <div class="chat-shell">
@@ -22,7 +22,7 @@
         <div class="form-row">
           <div class="field">
             <label>Дата «туда»</label>
-            <input name="date" type="date" value="{{ default_date }}" />
+            <input name="date" type="date" value="{{ default_date }}" required />
           </div>
           <div class="field">
             <label>Дата «обратно» <span class="muted">(необязательно)</span></label>
@@ -36,11 +36,26 @@
               <option value="any">Любой</option>
               <option value="flight">Авиа</option>
               <option value="train">ЖД</option>
+              <option value="bus">Автобус</option>
             </select>
           </div>
           <div class="field">
+            <label>Пассажиры</label>
+            <input name="passengers" type="number" min="1" max="9" step="1" value="1" required />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
             <label>Бюджет, {{ currency }} <span class="muted">(необязательно)</span></label>
             <input name="budget" type="number" min="0" step="100" placeholder="например, 6000" />
+          </div>
+          <div class="field">
+            <label>Сортировка</label>
+            <select name="sort">
+              <option value="price">по цене</option>
+              <option value="departure">по времени отправления</option>
+              <option value="duration">по длительности</option>
+            </select>
           </div>
         </div>
         <div class="field">
@@ -82,12 +97,15 @@
       </div>
     </div>
     <div class="card glass">
-      <h3>Как это работает</h3>
+      <h3>Источник данных</h3>
       <div class="hint">
-        В demo-режиме варианты генерируются локально (детерминированно): цена, время в пути
-        и число пересадок оцениваются по расстоянию между городами.<br /><br />
-        Для боевого режима подключается реальный провайдер (Aviasales/РЖД/Яндекс.Расписания) —
-        см. <a href="{{ base }}/settings">настройки</a> и <code>tickets.mode: provider</code>.
+        {% if tickets_mode == "sites" %}
+          Включён поиск по сайтам без API-ключей: Aviasales, РЖД, Туту и автобусные источники.
+        {% elif tickets_mode == "mock" %}
+          Включён demo-provider. Для production переключите <code>tickets.mode: provider</code>.
+        {% else %}
+          Поиск идёт через внешний provider из настроек. Если ключ не задан, будет показана ошибка API.
+        {% endif %}
       </div>
     </div>
     <div class="card glass">

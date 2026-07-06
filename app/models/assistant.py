@@ -1,12 +1,69 @@
-"""Модели слоя ассистента: черновики действий, документы, уведомления."""
+"""Модели слоя ассистента: чаты, черновики действий, документы, уведомления."""
 from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+
+
+# --- AssistantChat --------------------------------------------------------- #
+CHAT_ROLE_USER = "user"
+CHAT_ROLE_ASSISTANT = "assistant"
+CHAT_ROLE_SYSTEM = "system"
+CHAT_ROLE_TOOL = "tool"
+CHAT_ROLES = (CHAT_ROLE_USER, CHAT_ROLE_ASSISTANT, CHAT_ROLE_SYSTEM, CHAT_ROLE_TOOL)
+
+
+class AssistantChat(Base):
+    __tablename__ = "assistant_chats"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    title: Mapped[str] = mapped_column(String(255), default="Новый чат", nullable=False)
+    is_archived: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now(), nullable=False, index=True
+    )
+
+    user = relationship("User")
+    messages = relationship(
+        "AssistantChatMessage",
+        back_populates="chat",
+        cascade="all, delete-orphan",
+        order_by="AssistantChatMessage.created_at",
+    )
+
+    def __repr__(self) -> str:  # pragma: no cover
+        return f"<AssistantChat {self.id} u={self.user_id}>"
+
+
+class AssistantChatMessage(Base):
+    __tablename__ = "assistant_chat_messages"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    chat_id: Mapped[str] = mapped_column(
+        ForeignKey("assistant_chats.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    role: Mapped[str] = mapped_column(String(16), nullable=False)
+    content: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    payload_json: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), nullable=False, index=True
+    )
+
+    chat = relationship("AssistantChat", back_populates="messages")
+
+    def __repr__(self) -> str:  # pragma: no cover
+        return f"<AssistantChatMessage {self.id} {self.role}>"
+
 
 # --- AssistantAction -------------------------------------------------------- #
 # Действие, предложенное ассистентом и требующее подтверждения пользователя.

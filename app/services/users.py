@@ -25,6 +25,28 @@ def list_users(db: Session) -> list[User]:
     return list(db.execute(stmt).scalars().all())
 
 
+def list_active_users(db: Session) -> list[User]:
+    stmt = (
+        select(User)
+        .where(User.is_active.is_(True))
+        .order_by(User.full_name.asc(), User.email.asc(), User.id.asc())
+    )
+    return list(db.execute(stmt).scalars().all())
+
+
+def search_users(db: Session, query: str = "", *, active_only: bool = True, limit: int = 20) -> list[User]:
+    """Поиск сотрудников по имени/email для админских UI и assistant tools."""
+    users = list_active_users(db) if active_only else list_users(db)
+    q = " ".join((query or "").strip().lower().split())
+    if not q:
+        return users[:limit]
+    matched = [
+        user for user in users
+        if q in (user.full_name or "").lower() or q in user.email.lower()
+    ]
+    return matched[:limit]
+
+
 def count_users(db: Session) -> int:
     return int(db.execute(select(func.count()).select_from(User)).scalar_one())
 

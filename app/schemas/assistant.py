@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -11,6 +12,21 @@ class ChatRequest(BaseModel):
     # conversation_id позволит на следующем этапе поддержать многоходовые диалоги.
     conversation_id: str | None = None
     assistant: str | None = None
+
+
+class AssistantChatCreate(BaseModel):
+    title: str | None = Field(default=None, max_length=255)
+
+
+class AssistantChatUpdate(BaseModel):
+    title: str | None = Field(default=None, max_length=255)
+    is_archived: bool | None = None
+
+
+class AssistantChatMessageCreate(BaseModel):
+    role: Literal["user", "assistant", "system", "tool"]
+    content: str = Field(min_length=1)
+    payload: dict = Field(default_factory=dict)
 
 
 class ChatAction(BaseModel):
@@ -37,6 +53,7 @@ class FreeSlot(BaseModel):
 
 class TicketOption(BaseModel):
     provider: str
+    carrier: str = ""
     mode: str  # train | plane | bus
     origin: str
     destination: str
@@ -47,3 +64,5 @@ class TicketOption(BaseModel):
     price: float
     currency: str = "RUB"
     url: str = ""
+    available_seats: int | None = None
+    time_precision: str = "datetime"  # datetime | date

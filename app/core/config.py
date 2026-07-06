@@ -116,14 +116,17 @@ class SchedulingConfig(BaseModel):
 
 
 class TicketProviderConfig(BaseModel):
-    name: str = "generic"
+    name: str = "site_links"
     base_url: str = ""
     api_key: str = ""
+    # Имя переменной окружения для секрета. YAML остаётся источником структуры
+    # настроек, но сам ключ можно не хранить в файле.
+    api_key_env: str = "SMARTCAL_TICKETS_API_KEY"
     timeout: int = 30
 
 
 class TicketsConfig(BaseModel):
-    mode: str = "mock"  # mock | provider
+    mode: str = "sites"  # sites | provider | mock
     avg_speed_kmh: float = 65.0
     currency: str = "RUB"
     # Если очная поездка «туда-обратно за день» дольше — считаем нереалистичной.

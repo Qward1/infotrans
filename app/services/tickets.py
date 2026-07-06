@@ -1,7 +1,7 @@
 """Подбор билетов (поезд/самолёт/автобус) — тонкая обёртка над travel_search.
 
 Каноническая реализация провайдеров живёт в ``app/services/assistant/travel_search.py``
-(``TravelProvider`` / ``MockTravelProvider`` / провайдер под реальные API).
+(``TravelProvider`` / ``MockTravelProvider`` / реальные HTTP-провайдеры).
 Этот модуль сохраняет прежний контракт ``search(settings, origin, destination, date)``
 для эндпоинта ``/api/tickets/search`` и обратной совместимости.
 
@@ -23,8 +23,9 @@
      ("7 ч 30 мин") парсим регуляркой в минуты.
    * Учитывать robots.txt, rate-limit, антибот (часто нужен Playwright/Selenium).
 
-3. Fallback без провайдера: distance_km / avg_speed_kmh * 60
-   (см. ``location_service`` и ``tickets.avg_speed_kmh`` в YAML).
+3. Fallback без провайдера в production-flow не используется: если ``tickets.mode:
+   provider`` и внешний API не настроен, endpoint возвращает явную ошибку. Локальная
+   генерация доступна только при осознанном ``tickets.mode: mock`` для demo/test.
 """
 from __future__ import annotations
 
@@ -41,6 +42,42 @@ def search(
     destination: str,
     depart_date: datetime | None = None,
     transport_type: str = "any",
+    return_date: datetime | None = None,
+    passengers: int = 1,
+    preferences: tuple[str, ...] | list[str] | None = None,
+    sort_by: str = "price",
 ) -> list[TicketOption]:
     """Единая точка входа: список вариантов билетов (делегирует travel_search)."""
-    return travel_search.search(settings, origin, destination, depart_date, transport_type)
+    return travel_search.search(
+        settings,
+        origin,
+        destination,
+        depart_date,
+        transport_type,
+        return_date=return_date,
+        passengers=passengers,
+        preferences=preferences,
+        sort_by=sort_by,
+    )
+
+
+def external_searches(
+    origin: str,
+    destination: str,
+    depart_date: datetime,
+    transport_type: str = "any",
+    return_date: datetime | None = None,
+    passengers: int = 1,
+    sort_by: str = "price",
+) -> list[dict]:
+    """Ссылки на реальные сайты поиска билетов без API-ключей."""
+    params = travel_search.build_params(
+        origin,
+        destination,
+        depart_date,
+        transport_type,
+        return_date=return_date,
+        passengers=passengers,
+        sort_by=sort_by,
+    )
+    return [link.to_dict() for link in travel_search.external_search_links(params)]

@@ -13,39 +13,41 @@
     (function () {
       var t = localStorage.getItem("smartcal-theme") || "light";
       document.documentElement.setAttribute("data-theme", t);
+      if (localStorage.getItem("smartcal-sidebar-collapsed") === "1") {
+        document.documentElement.classList.add("sidebar-collapsed");
+      }
     })();
   </script>
 </head>
 <body>
   <div class="app-shell">
-    <aside class="sidebar glass">
+    <aside id="sidebar" class="sidebar glass">
       <div class="brand">
         <span class="logo">🗓️</span>
-        <div>
+        <div class="brand-title">
           {{ app_name }}
-          <small>встречи · поездки · ассистент</small>
         </div>
       </div>
 
       <nav class="nav">
         <div class="nav-section">Рабочее место</div>
-        <a href="{{ base }}/dashboard" class="{{ 'active' if active == 'dashboard' }}"><span class="ic">🏠</span> Дашборд</a>
-        <a href="{{ base }}/calendar" class="{{ 'active' if active == 'calendar' }}"><span class="ic">📆</span> Календарь</a>
-        <a href="{{ base }}/chat" class="{{ 'active' if active == 'chat' }}"><span class="ic">💬</span> Ассистент</a>
+        <a href="{{ base }}/dashboard" class="{{ 'active' if active == 'dashboard' }}" title="Дашборд"><span class="ic">🏠</span><span class="nav-label">Дашборд</span></a>
+        <a href="{{ base }}/calendar" class="{{ 'active' if active == 'calendar' }}" title="Календарь"><span class="ic">📆</span><span class="nav-label">Календарь</span></a>
+        <a href="{{ base }}/chat" class="{{ 'active' if active == 'chat' }}" title="Ассистент"><span class="ic">💬</span><span class="nav-label">Ассистент</span></a>
 
         <div class="nav-section">Инструменты</div>
-        <a href="{{ base }}/documents" class="{{ 'active' if active == 'documents' }}"><span class="ic">📄</span> Документы</a>
-        <a href="{{ base }}/travel" class="{{ 'active' if active == 'travel' }}"><span class="ic">🎫</span> Билеты</a>
-        <a href="{{ base }}/notifications" class="{{ 'active' if active == 'notifications' }}"><span class="ic">🔔</span> Уведомления</a>
+        <a href="{{ base }}/documents" class="{{ 'active' if active == 'documents' }}" title="Документы"><span class="ic">📄</span><span class="nav-label">Документы</span></a>
+        <a href="{{ base }}/travel" class="{{ 'active' if active == 'travel' }}" title="Билеты"><span class="ic">🎫</span><span class="nav-label">Билеты</span></a>
+        <a href="{{ base }}/notifications" class="{{ 'active' if active == 'notifications' }}" title="Уведомления"><span class="ic">🔔</span><span class="nav-label">Уведомления</span></a>
 
         {% if current_user and current_user.is_admin %}
         <div class="nav-section">Администрирование</div>
-        <a href="{{ base }}/admin/users" class="{{ 'active' if active == 'admin_users' }}"><span class="ic">👥</span> Пользователи</a>
-        <a href="{{ base }}/admin/stats" class="{{ 'active' if active == 'admin_stats' }}"><span class="ic">📊</span> Статистика</a>
+        <a href="{{ base }}/admin/users" class="{{ 'active' if active == 'admin_users' }}" title="Пользователи"><span class="ic">👥</span><span class="nav-label">Пользователи</span></a>
+        <a href="{{ base }}/admin/stats" class="{{ 'active' if active == 'admin_stats' }}" title="Статистика"><span class="ic">📊</span><span class="nav-label">Статистика</span></a>
         {% endif %}
 
         <div class="nav-section">Система</div>
-        <a href="{{ base }}/settings" class="{{ 'active' if active == 'settings' }}"><span class="ic">⚙️</span> Настройки</a>
+        <a href="{{ base }}/settings" class="{{ 'active' if active == 'settings' }}" title="Настройки"><span class="ic">⚙️</span><span class="nav-label">Настройки</span></a>
       </nav>
 
       <div class="sidebar-footer">
@@ -59,7 +61,7 @@
             </div>
           </div>
         </div>
-        <a href="{{ base }}/logout" class="btn ghost small" style="width:100%; justify-content:center; margin-top:8px;">Выйти</a>
+        <a href="{{ base }}/logout" class="btn ghost small sidebar-logout" style="width:100%; justify-content:center; margin-top:8px;" title="Выйти"><span class="logout-label">Выйти</span></a>
         {% endif %}
       </div>
     </aside>
@@ -67,7 +69,7 @@
     <main class="main">
       <header class="topbar glass">
         <div class="flex items-center gap-12">
-          <button class="btn icon menu-btn" onclick="toggleSidebar()" aria-label="Меню">☰</button>
+          <button id="sidebar-toggle" class="btn icon menu-btn" onclick="toggleSidebar()" aria-label="Свернуть меню" aria-controls="sidebar">☰</button>
           <div>
             <h1>{% block page_title %}{% endblock %}</h1>
             <div class="subtitle">{% block page_subtitle %}{% endblock %}</div>

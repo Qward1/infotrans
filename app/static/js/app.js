@@ -25,11 +25,35 @@
   };
   applyTheme(localStorage.getItem(THEME_KEY) || "light");
 
-  /* --------------------------- Сайдбар (моб.) --------------------------- */
+  /* --------------------------- Сайдбар --------------------------- */
+  const SIDEBAR_KEY = "smartcal-sidebar-collapsed";
+  const sidebarMq = window.matchMedia("(max-width: 860px)");
+
+  function updateSidebarButton() {
+    const btn = document.getElementById("sidebar-toggle");
+    if (!btn) return;
+    const collapsed = document.documentElement.classList.contains("sidebar-collapsed");
+    btn.textContent = sidebarMq.matches ? "☰" : (collapsed ? "»" : "☰");
+    btn.setAttribute("aria-label", sidebarMq.matches ? "Меню" : (collapsed ? "Развернуть меню" : "Свернуть меню"));
+    btn.setAttribute("aria-expanded", sidebarMq.matches ? "true" : String(!collapsed));
+  }
+
+  function applySidebarCollapsed(collapsed) {
+    document.documentElement.classList.toggle("sidebar-collapsed", collapsed);
+    localStorage.setItem(SIDEBAR_KEY, collapsed ? "1" : "0");
+    updateSidebarButton();
+  }
+
   window.toggleSidebar = function () {
     const sb = document.querySelector(".sidebar");
-    if (sb) sb.classList.toggle("open");
+    if (sidebarMq.matches) {
+      if (sb) sb.classList.toggle("open");
+      return;
+    }
+    applySidebarCollapsed(!document.documentElement.classList.contains("sidebar-collapsed"));
   };
+  applySidebarCollapsed(localStorage.getItem(SIDEBAR_KEY) === "1");
+  sidebarMq.addEventListener("change", updateSidebarButton);
 
   /* ----------------------------- Тосты ----------------------------- */
   function toast(msg, kind) {
@@ -81,13 +105,17 @@
     const f = eventModal.querySelector("form");
     const titleEl = document.getElementById("event-modal-title");
     const deleteBtn = eventModal.querySelector("[data-role=delete]");
+    const ownerNote = document.getElementById("event-owner-note");
 
     function openEvent(data) {
       f.reset();
       data = data || {};
       const editing = !!data.id;
+      const calendarContext = window.smartcalCalendarContext || {};
+      const owner = data.owner || calendarContext.owner || null;
       titleEl.textContent = editing ? "Редактирование встречи" : "Новая встреча";
       f.elements["id"].value = data.id || "";
+      f.elements["owner_id"].value = data.owner_id || (owner && owner.id) || "";
       f.elements["title"].value = data.title || "";
       f.elements["description"].value = data.description || "";
       const start = data.start_at ? new Date(data.start_at) : defaultStart();
@@ -98,9 +126,16 @@
       f.elements["city"].value = data.city || "";
       f.elements["address"].value = data.address || "";
       f.elements["meeting_url"].value = data.meeting_url || "";
+      f.elements["participants"].value = (data.participants || []).map((p) => p.email || p).join(", ");
       f.elements["priority"].value = data.priority != null ? data.priority : 5;
       f.elements["importance"].value = data.importance || "normal";
       f.elements["status"].value = data.status || "planned";
+      if (ownerNote) {
+        const ownerName = (owner && (owner.full_name || owner.email)) || data.owner_name || "";
+        const foreign = calendarContext.adminView || (owner && String(owner.id) !== String(calendarContext.viewerId || ""));
+        ownerNote.style.display = foreign && ownerName ? "block" : "none";
+        ownerNote.textContent = ownerName ? "Вы редактируете календарь: " + ownerName : "";
+      }
       deleteBtn.style.display = editing ? "inline-flex" : "none";
       eventModal.classList.add("open");
     }
@@ -129,6 +164,13 @@
         priority: parseInt(f.elements["priority"].value, 10),
         importance: f.elements["importance"].value,
       };
+      const ownerId = f.elements["owner_id"].value;
+      if (ownerId) payload.owner_id = parseInt(ownerId, 10);
+      const participants = f.elements["participants"].value
+        .split(",")
+        .map((x) => x.trim())
+        .filter(Boolean);
+      payload.participants = participants;
       try {
         if (id) {
           payload.status = f.elements["status"].value;
@@ -154,26 +196,305 @@
       } catch (err) { toast(err.message, "err"); }
     });
 
-    // Клики по событиям в календаре/дашборде
-    document.querySelectorAll("[data-event]").forEach((node) => {
-      node.addEventListener("click", () => {
-        try { openEvent(JSON.parse(node.getAttribute("data-event"))); }
-        catch (e) { /* ignore */ }
+    function bindEventTriggers(root) {
+      root = root || document;
+      root.querySelectorAll("[data-event]").forEach((node) => {
+        if (node.dataset.eventBound) return;
+        node.dataset.eventBound = "1";
+        node.addEventListener("click", () => {
+          try { openEvent(JSON.parse(node.getAttribute("data-event"))); }
+          catch (e) { /* ignore */ }
+        });
       });
-    });
-    // Кнопки «добавить» с предустановленной датой
-    document.querySelectorAll("[data-new-event]").forEach((node) => {
-      node.addEventListener("click", () => {
-        const preset = {};
-        const day = node.getAttribute("data-day");
-        if (day) {
-          const s = new Date(day + "T10:00");
-          preset.start_at = s.toISOString();
-          preset.end_at = new Date(s.getTime() + 3600000).toISOString();
+      root.querySelectorAll("[data-new-event]").forEach((node) => {
+        if (node.dataset.newEventBound) return;
+        node.dataset.newEventBound = "1";
+        node.addEventListener("click", () => {
+          const preset = {};
+          const day = node.getAttribute("data-day");
+          const time = node.getAttribute("data-time") || "10:00";
+          const calendarContext = window.smartcalCalendarContext || {};
+          if (calendarContext.owner) {
+            preset.owner_id = calendarContext.owner.id;
+            preset.owner = calendarContext.owner;
+          }
+          if (day) {
+            const s = new Date(day + "T" + time);
+            preset.start_at = s.toISOString();
+            preset.end_at = new Date(s.getTime() + 3600000).toISOString();
+          }
+          openEvent(preset);
+        });
+      });
+    }
+    window.bindEventModalTriggers = bindEventTriggers;
+    bindEventTriggers(document);
+  }
+
+  /* =====================================================================
+     Календарь: Day / Week / Month без перезагрузки страницы
+     ===================================================================== */
+  const calendarBody = document.getElementById("calendar-body");
+  if (calendarBody) {
+    const initialNode = document.getElementById("calendar-initial");
+    const rangeEl = document.getElementById("calendar-range");
+    const subtitleEl = document.getElementById("calendar-subtitle");
+    const viewButtons = document.querySelectorAll("[data-cal-view]");
+    const navButtons = document.querySelectorAll("[data-cal-nav]");
+    const VIEW_KEY = "smartcal-calendar-view";
+    const HOUR_HEIGHT = 48;
+    const DOW = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+    let calState = JSON.parse(initialNode.textContent || "{}");
+
+    const escCal = (s) =>
+      String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
+        ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    const loadingCal = (label) => `<div class="loading"><span class="spinner"></span> ${escCal(label || "Загрузка…")}</div>`;
+    const dateAtNoon = (iso) => new Date(iso + "T12:00:00");
+    const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const addDays = (iso, days) => {
+      const d = dateAtNoon(iso);
+      d.setDate(d.getDate() + days);
+      return ymd(d);
+    };
+    const dayLabel = (iso) => dateAtNoon(iso).toLocaleDateString("ru-RU", { day: "2-digit", month: "short" });
+    const fullDateLabel = (iso) => dateAtNoon(iso).toLocaleDateString("ru-RU", { weekday: "long", day: "2-digit", month: "long" });
+    const eventDate = (iso) => new Date(iso);
+    const eventTime = (iso) => {
+      const d = eventDate(iso);
+      return isNaN(d) ? "" : d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+    };
+    const priorityClass = (p) => (p >= 9 ? "critical" : p >= 7 ? "high" : p >= 4 ? "mid" : "low");
+    const locLabel = (e) => e.location_type === "online" ? "Онлайн" : e.location_type === "hybrid" ? "Гибрид" : "Офлайн";
+
+    function eventPayload(e) {
+      return escCal(JSON.stringify({
+        id: e.id,
+        title: e.title,
+        description: e.description || "",
+        start_at: e.start_at,
+        end_at: e.end_at,
+        location_type: e.location_type,
+        city: e.city || "",
+        address: e.address || "",
+        meeting_url: e.meeting_url || "",
+        priority: e.priority,
+        importance: e.importance,
+        owner_id: e.owner_id,
+        owner_name: e.owner_name,
+        participants: e.participants || [],
+        status: e.status,
+      }));
+    }
+
+    function eventsForDay(dateIso) {
+      const start = new Date(dateIso + "T00:00:00");
+      const end = new Date(start.getTime() + 86400000);
+      return (calState.events || [])
+        .filter((e) => eventDate(e.start_at) < end && eventDate(e.end_at) > start)
+        .sort((a, b) => eventDate(a.start_at) - eventDate(b.start_at));
+    }
+
+    function segmentsForDay(dateIso) {
+      const start = new Date(dateIso + "T00:00:00");
+      const end = new Date(start.getTime() + 86400000);
+      const segments = eventsForDay(dateIso).map((e) => {
+        const s = eventDate(e.start_at);
+        const f = eventDate(e.end_at);
+        const top = Math.max(0, Math.floor((Math.max(s, start) - start) / 60000));
+        const bottom = Math.min(1440, Math.ceil((Math.min(f, end) - start) / 60000));
+        return { event: e, startMin: top, endMin: Math.max(top + 15, bottom), lane: 0, laneCount: 1 };
+      });
+      const laneEnds = [];
+      segments.forEach((seg) => {
+        let lane = laneEnds.findIndex((endMin) => endMin <= seg.startMin);
+        if (lane === -1) {
+          lane = laneEnds.length;
+          laneEnds.push(0);
         }
-        openEvent(preset);
+        seg.lane = lane;
+        laneEnds[lane] = seg.endMin;
+      });
+      const laneCount = Math.max(1, laneEnds.length);
+      segments.forEach((seg) => { seg.laneCount = laneCount; });
+      return segments;
+    }
+
+    function hourRows() {
+      return (calState.hours || []).map((h) =>
+        `<div class="timegrid-hour" style="height:${HOUR_HEIGHT}px;">${String(h).padStart(2, "0")}:00</div>`
+      ).join("");
+    }
+
+    function hourLines() {
+      return (calState.hours || []).map(() =>
+        `<div class="timegrid-line" style="height:${HOUR_HEIGHT}px;"></div>`
+      ).join("");
+    }
+
+    function timedEvent(seg) {
+      const e = seg.event;
+      const top = Math.round(seg.startMin * HOUR_HEIGHT / 60);
+      const height = Math.max(28, Math.round((seg.endMin - seg.startMin) * HOUR_HEIGHT / 60) - 2);
+      const left = `calc(${(seg.lane * 100 / seg.laneCount).toFixed(4)}% + 3px)`;
+      const width = `calc(${(100 / seg.laneCount).toFixed(4)}% - 6px)`;
+      const cls = `cal-event timed-event p-${priorityClass(e.priority)} ${e.status === "cancelled" ? "cancelled" : ""} ${e.is_conflict ? "conflict" : ""}`;
+      return (
+        `<div class="${cls}" style="top:${top}px; height:${height}px; left:${left}; width:${width};" ` +
+        `data-event='${eventPayload(e)}' role="button" tabindex="0" title="${escCal(e.title)}">` +
+        `<div class="ce-time">${eventTime(e.start_at)}–${eventTime(e.end_at)}</div>` +
+        `<div class="ce-title">${escCal(e.title)}</div>` +
+        `<div class="ce-loc"><span class="dot ${escCal(e.location_type)}"></span>${escCal(locLabel(e))}${e.city ? " · " + escCal(e.city) : ""}</div>` +
+        `</div>`
+      );
+    }
+
+    function compactEvent(e) {
+      const cls = `cal-event compact-event p-${priorityClass(e.priority)} ${e.status === "cancelled" ? "cancelled" : ""} ${e.is_conflict ? "conflict" : ""}`;
+      return (
+        `<div class="${cls}" data-event='${eventPayload(e)}' role="button" tabindex="0" title="${escCal(e.title)}">` +
+        `<div class="ce-time">${eventTime(e.start_at)}–${eventTime(e.end_at)}</div>` +
+        `<div class="ce-title">${escCal(e.title)}</div>` +
+        `</div>`
+      );
+    }
+
+    function timegridColumn(day) {
+      const segments = segmentsForDay(day.date);
+      const empty = segments.length ? "" : `<div class="cal-empty timegrid-empty">нет встреч</div>`;
+      return (
+        `<div class="timegrid-col ${day.is_today ? "today" : ""}" data-day="${day.date}">` +
+        `<div class="timegrid-bg">${hourLines()}</div>${empty}` +
+        segments.map(timedEvent).join("") +
+        `</div>`
+      );
+    }
+
+    function renderDay() {
+      const day = calState.days[0] || { date: calState.date, is_today: calState.date === calState.today };
+      return (
+        `<div class="calendar-timegrid day-timegrid glass">` +
+        `<div class="timegrid-corner"></div>` +
+        `<div class="timegrid-head ${day.is_today ? "today" : ""}">` +
+        `<span>${escCal(fullDateLabel(day.date))}</span>` +
+        `<button class="btn small ghost" data-new-event data-day="${day.date}">＋ добавить</button>` +
+        `</div>` +
+        `<div class="timegrid-hours">${hourRows()}</div>` +
+        timegridColumn(day) +
+        `</div>`
+      );
+    }
+
+    function renderWeek() {
+      const heads = (calState.days || []).map((day, idx) =>
+        `<div class="timegrid-head ${day.is_today ? "today" : ""}">` +
+        `<span><b>${DOW[idx] || ""}</b> ${escCal(dayLabel(day.date))}</span>` +
+        `<button class="btn small ghost" data-new-event data-day="${day.date}">＋</button>` +
+        `</div>`
+      ).join("");
+      return (
+        `<div class="calendar-timegrid week-timegrid glass">` +
+        `<div class="timegrid-corner"></div>${heads}` +
+        `<div class="timegrid-hours">${hourRows()}</div>` +
+        (calState.days || []).map(timegridColumn).join("") +
+        `</div>`
+      );
+    }
+
+    function renderMonth() {
+      const dow = DOW.map((d) => `<div class="month-dow">${d}</div>`).join("");
+      const cells = (calState.days || []).map((day) => {
+        const evs = eventsForDay(day.date);
+        const shown = evs.slice(0, 4).map(compactEvent).join("");
+        const more = evs.length > 4 ? `<div class="month-more">+${evs.length - 4} ещё</div>` : "";
+        return (
+          `<div class="month-cell ${day.is_today ? "today" : ""} ${day.is_current_month ? "" : "outside"}">` +
+          `<div class="month-cell-head"><span>${dateAtNoon(day.date).getDate()}</span>` +
+          `<button class="day-add" data-new-event data-day="${day.date}">＋</button></div>` +
+          (evs.length ? shown + more : `<div class="cal-empty">нет встреч</div>`) +
+          `</div>`
+        );
+      }).join("");
+      return `<div class="month-grid glass">${dow}${cells}</div>`;
+    }
+
+    function updateChrome() {
+      window.smartcalCalendarContext = {
+        owner: calState.owner || null,
+        adminView: !!calState.admin_view,
+        viewerId: calState.viewer ? calState.viewer.id : null,
+      };
+      if (rangeEl) rangeEl.textContent = calState.label;
+      if (subtitleEl) subtitleEl.textContent = calState.label;
+      viewButtons.forEach((btn) => {
+        const active = btn.getAttribute("data-cal-view") === calState.view;
+        btn.classList.toggle("primary", active);
+        btn.classList.toggle("ghost", !active);
+      });
+    }
+
+    function renderCalendar() {
+      updateChrome();
+      if (calState.view === "day") calendarBody.innerHTML = renderDay();
+      else if (calState.view === "month") calendarBody.innerHTML = renderMonth();
+      else calendarBody.innerHTML = renderWeek();
+      if (window.bindEventModalTriggers) window.bindEventModalTriggers(calendarBody);
+    }
+
+    async function loadCalendar(view, date, push, userId) {
+      calendarBody.innerHTML = loadingCal("Обновляю календарь…");
+      const params = new URLSearchParams({ view, date });
+      const selectedUserId = userId !== undefined
+        ? userId
+        : (calState.owner && !calState.owner.is_current_user ? calState.owner.id : "");
+      if (selectedUserId) {
+        params.set("user_id", selectedUserId);
+      }
+      try {
+        calState = await window.api("GET", "/api/calendar/range?" + params.toString());
+        localStorage.setItem(VIEW_KEY, calState.view);
+        renderCalendar();
+        if (push !== false) {
+          history.pushState({ calendar: true, view: calState.view, date: calState.date }, "", `${BASE}/calendar?${params.toString()}`);
+        }
+      } catch (e) {
+        calendarBody.innerHTML = `<div class="alert error">${escCal(e.message)}</div>`;
+      }
+    }
+
+    viewButtons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const view = btn.getAttribute("data-cal-view");
+        if (view && view !== calState.view) loadCalendar(view, calState.date, true);
       });
     });
+
+    navButtons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const dir = btn.getAttribute("data-cal-nav");
+        const target = dir === "prev" ? calState.prev_date : dir === "next" ? calState.next_date : calState.today;
+        loadCalendar(calState.view, target, true);
+      });
+    });
+
+    window.addEventListener("popstate", () => {
+      const params = new URLSearchParams(location.search);
+      loadCalendar(
+        params.get("view") || localStorage.getItem(VIEW_KEY) || "week",
+        params.get("date") || calState.today,
+        false,
+        params.get("user_id") || ""
+      );
+    });
+
+    renderCalendar();
+    const urlView = new URLSearchParams(location.search).get("view");
+    const savedView = localStorage.getItem(VIEW_KEY);
+    if (!urlView && savedView && savedView !== calState.view) {
+      loadCalendar(savedView, calState.date, false);
+    } else {
+      localStorage.setItem(VIEW_KEY, calState.view);
+    }
   }
 
   /* =====================================================================
@@ -181,13 +502,40 @@
      ===================================================================== */
   const chatLog = document.getElementById("chat-log");
   if (chatLog) {
+    const shell = document.getElementById("assistant-shell");
     const form = document.getElementById("chat-form");
     const input = document.getElementById("chat-input");
     const uploadInput = document.getElementById("chat-file");
+    const historyList = document.getElementById("chat-history-list");
+    const historyState = document.getElementById("chat-history-state");
+    const historyCount = document.getElementById("chat-history-count");
+    const historyToggle = document.getElementById("chat-history-toggle");
+    const historyMobile = document.getElementById("chat-history-mobile");
+    const sideToggle = document.getElementById("chat-side-toggle");
+    const saveState = document.getElementById("chat-save-state");
+    const chatUserSelect = document.getElementById("chat-user-select");
+    const chatUserSearch = document.getElementById("chat-user-search");
+    const readonlyNote = document.getElementById("chat-readonly-note");
+    const newChatButtons = [document.getElementById("chat-new"), document.getElementById("chat-new-inline")].filter(Boolean);
+    const CHAT_HISTORY_COLLAPSED_KEY = "smartcal-chat-history-collapsed";
+    const CHAT_SIDE_COLLAPSED_KEY = "smartcal-chat-side-collapsed";
+    const chatMq = window.matchMedia("(max-width: 1080px)");
+    const currentUserId = shell ? String(shell.getAttribute("data-current-user-id") || "") : "";
+    let activeChatId = null;
+    let activeChatOwnerId = currentUserId;
+    let selectedChatUserId = chatUserSelect ? String(chatUserSelect.value || currentUserId) : currentUserId;
+    let chats = [];
+    let saveStateTimer = null;
 
     const esc = (s) =>
       String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
         ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    const fmtChatDate = (iso) => {
+      if (!iso) return "";
+      const d = new Date(iso);
+      if (isNaN(d)) return "";
+      return d.toLocaleString("ru-RU", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+    };
     const fmtDT = (iso) => {
       if (!iso) return "";
       const d = new Date(iso);
@@ -199,6 +547,72 @@
       return isNaN(d) ? "" : d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
     };
     const LOC_RU = { online: "Онлайн", offline: "Очно", hybrid: "Гибрид" };
+
+    function setSaveState(text, kind) {
+      if (!saveState) return;
+      clearTimeout(saveStateTimer);
+      saveState.textContent = text || "";
+      saveState.classList.toggle("error", kind === "err");
+      if (text && kind !== "err") {
+        saveStateTimer = setTimeout(() => { saveState.textContent = ""; }, 1800);
+      }
+    }
+
+    function setHistoryState(text, kind) {
+      if (!historyState) return;
+      historyState.textContent = text || "";
+      historyState.classList.toggle("error", kind === "err");
+      historyState.style.display = text ? "block" : "none";
+    }
+
+    function setFormBusy(busy) {
+      if (!form) return;
+      form.querySelectorAll("input, button").forEach((el) => { el.disabled = busy; });
+    }
+
+    function isViewingForeignChat() {
+      return selectedChatUserId && currentUserId && String(selectedChatUserId) !== String(currentUserId);
+    }
+
+    function applyChatReadonly() {
+      const readonly = isViewingForeignChat();
+      if (readonlyNote) readonlyNote.style.display = readonly ? "block" : "none";
+      if (form) {
+        form.querySelectorAll("input, button").forEach((el) => { el.disabled = readonly; });
+      }
+      newChatButtons.forEach((btn) => { btn.disabled = readonly; });
+    }
+
+    function applyHistoryCollapsed(collapsed) {
+      if (!shell) return;
+      shell.classList.toggle("chat-history-collapsed", collapsed);
+      localStorage.setItem(CHAT_HISTORY_COLLAPSED_KEY, collapsed ? "1" : "0");
+      if (historyToggle) {
+        historyToggle.textContent = collapsed ? "›" : "‹";
+        historyToggle.setAttribute("aria-label", collapsed ? "Развернуть историю" : "Свернуть историю");
+        historyToggle.setAttribute("aria-expanded", String(!collapsed));
+      }
+    }
+
+    function applySideCollapsed(collapsed) {
+      if (!shell) return;
+      shell.classList.toggle("chat-side-collapsed", collapsed);
+      localStorage.setItem(CHAT_SIDE_COLLAPSED_KEY, collapsed ? "1" : "0");
+      if (sideToggle) {
+        sideToggle.textContent = collapsed ? "‹" : "›";
+        sideToggle.setAttribute("aria-label", collapsed ? "Развернуть подсказки" : "Свернуть подсказки");
+        sideToggle.setAttribute("aria-expanded", String(!collapsed));
+      }
+    }
+
+    function closeHistoryMobile() {
+      if (shell) shell.classList.remove("chat-history-mobile-open");
+    }
+
+    function renderWelcome() {
+      chatLog.innerHTML = "";
+      renderResult({ reply: chatLog.getAttribute("data-greeting") || "Здравствуйте! Чем помочь?" });
+    }
 
     function addUserMsg(text) {
       const el = document.createElement("div");
@@ -244,17 +658,32 @@
 
     function ticketsHtml(opts) {
       const icon = { plane: "✈️", train: "🚆", bus: "🚌" };
+      const modeRu = { plane: "Авиа", train: "ЖД", bus: "Автобус" };
       return opts.map((o) => {
         const h = Math.floor(o.duration_minutes / 60), m = o.duration_minutes % 60;
         const tr = o.transfers > 0 ? `, пересадок: ${o.transfers}` : ", без пересадок";
         return (
           `<div class="a-slot">` +
-          `<div>${icon[o.mode] || ""} <b>${esc(o.mode)}</b> · ${fmtDT(o.depart_at)}→${fmtT(o.arrive_at)} (${h}ч ${String(m).padStart(2, "0")}м${tr})` +
+          `<div>${icon[o.mode] || ""} <b>${esc(modeRu[o.mode] || o.mode)}</b> · ${fmtDT(o.depart_at)}→${fmtT(o.arrive_at)} (${h}ч ${String(m).padStart(2, "0")}м${tr})` +
           `<div class="a-muted">${o.price.toFixed(0)} ${esc(o.currency)}</div></div>` +
           `<a class="btn small ghost" href="${esc(o.url)}" target="_blank" rel="noopener">Открыть</a>` +
           `</div>`
         );
       }).join("");
+    }
+
+    function travelSourcesHtml(sources) {
+      const icon = { plane: "✈️", train: "🚆", bus: "🚌" };
+      const modeRu = { plane: "Авиа", train: "ЖД", bus: "Автобус" };
+      return sources.map((s) => (
+        `<div class="a-slot">` +
+        `<div>${icon[s.mode] || "🔎"} <b>${esc(s.title || s.provider)}</b>` +
+        `<div class="a-muted">${esc(s.origin)} → ${esc(s.destination)} · ${esc(s.depart_date)} · ${esc(modeRu[s.mode] || s.mode || "")}</div>` +
+        (s.note ? `<div class="a-muted">${esc(s.note)}</div>` : "") +
+        `</div>` +
+        `<a class="btn small ghost" href="${esc(s.url)}" target="_blank" rel="noopener">Открыть</a>` +
+        `</div>`
+      )).join("");
     }
 
     function protocolHtml(p) {
@@ -277,6 +706,28 @@
         (d.explanation ? `<div class="a-card-row">${esc(d.explanation)}</div>` : "") + rows;
     }
 
+    function employeeAvailabilityHtml(items) {
+      return (items || []).map((item) => {
+        const busy = (item.busyIntervals || []).length;
+        const slots = item.availableSlots || [];
+        const slotRows = slots.slice(0, 5).map((s) => {
+          const payload = {
+            owner_id: item.employeeId,
+            start_at: s.start_at,
+            end_at: s.end_at,
+            source: "assistant",
+          };
+          return `<div class="a-slot"><div><b>${fmtDT(s.start_at)}–${fmtT(s.end_at)}</b>` +
+            `<div class="a-muted">${s.duration_minutes} мин · ${esc(s.reason || "")}</div></div>` +
+            `<button class="btn small ghost" data-slot='${esc(JSON.stringify(payload))}'>Занять</button></div>`;
+        }).join("");
+        const empty = slots.length ? "" : "<div class='a-muted'>Свободных слотов не найдено.</div>";
+        return `<div class="a-sec"><b>${esc(item.name)}</b>` +
+          `<div class="a-muted">${esc((item.requestedRange || {}).label || "")} · занято интервалов: ${busy} · свободных окон: ${slots.length}</div>` +
+          slotRows + empty + `</div>`;
+      }).join("");
+    }
+
     function renderCard(card) {
       const el = document.createElement("div");
       el.className = "a-card";
@@ -284,9 +735,11 @@
       if (card.kind === "created_event") el.innerHTML = eventCardHtml(d);
       else if (card.kind === "alternative_slots") el.innerHTML = `<div class="a-card-title">🟢 ${esc(card.title)}</div>` + slotsHtml(d.slots || []);
       else if (card.kind === "travel_options") el.innerHTML = `<div class="a-card-title">🎫 ${esc(card.title)}</div>` + ticketsHtml(d.options || []);
+      else if (card.kind === "travel_sources") el.innerHTML = `<div class="a-card-title">🔎 ${esc(card.title)}</div>` + travelSourcesHtml(d.sources || []);
       else if (card.kind === "protocol") el.innerHTML = protocolHtml(d);
       else if (card.kind === "tasks") el.innerHTML = `<div class="a-card-title">✅ Задачи</div><ul>` + (d.items || []).map((i) => `<li>${esc(i)}</li>`).join("") + "</ul>";
       else if (card.kind === "conflict") el.innerHTML = conflictHtml(d);
+      else if (card.kind === "employee_availability") el.innerHTML = `<div class="a-card-title">🟢 ${esc(card.title)}</div>` + employeeAvailabilityHtml(d.items || []);
       else if (card.kind === "reschedule_plan") el.innerHTML = `<div class="a-card-title">🔀 План переноса</div><div class="a-card-row">«${esc((d.conflict||{}).title||"встреча")}»: ${fmtDT(d.old_start_at)} → <b>${fmtDT(d.start_at)}</b></div>`;
       else if (card.kind === "reminder") el.innerHTML = `<div class="a-card-title">⏰ Напоминание</div><div class="a-card-row">${esc((d.event||{}).title||"")} · за ${d.minutes_before} мин (${fmtDT(d.remind_at)})</div>`;
       else if (card.kind === "summary" || card.kind === "calendar") {
@@ -312,6 +765,7 @@
         const style = a.style === "danger" ? "danger" : a.style === "primary" ? "primary" : "ghost";
         b.className = "btn small " + style;
         b.textContent = a.label;
+        b.disabled = isViewingForeignChat();
         b.addEventListener("click", () => runAction(a, b, container));
         wrap.appendChild(b);
       });
@@ -326,9 +780,14 @@
           const res = await api("POST", url, {});
           container.querySelectorAll(".msg-actions button").forEach((x) => (x.disabled = true));
           if (a.type === "confirm") {
-            const bot = renderResult({ reply: res.message || "Готово ✅", cards: res.created_event ? [{ kind: "created_event", title: "Встреча", data: res.created_event }] : [] });
+            const payload = { reply: res.message || "Готово ✅", cards: res.created_event ? [{ kind: "created_event", title: "Встреча", data: res.created_event }] : [] };
+            renderResult(payload);
+            saveAssistantSnapshot(payload);
             toast(res.message || "Действие выполнено");
           } else {
+            const payload = { reply: "Действие отменено." };
+            renderResult(payload);
+            saveAssistantSnapshot(payload);
             toast("Отменено");
           }
         } catch (err) {
@@ -352,12 +811,6 @@
       const reply = document.createElement("div");
       reply.textContent = data.reply || "";
       el.appendChild(reply);
-      if (data.intent) {
-        const meta = document.createElement("span");
-        meta.className = "meta";
-        meta.textContent = `интент: ${data.intent}` + (data.mode ? ` · режим: ${data.mode}` : "") + (data.status ? ` · ${data.status}` : "");
-        el.appendChild(meta);
-      }
       (data.warnings || []).forEach((w) => {
         const wr = document.createElement("div");
         wr.className = "a-warn";
@@ -372,17 +825,188 @@
     }
     window.chatAddMsg = (text) => renderResult({ reply: text });
 
+    function renderHistory() {
+      if (!historyList) return;
+      historyList.innerHTML = "";
+      if (historyCount) historyCount.textContent = chats.length ? `${chats.length}` : "";
+      chats.forEach((chat) => {
+        const item = document.createElement("div");
+        item.className = "chat-history-item" + (chat.id === activeChatId ? " active" : "");
+
+        const main = document.createElement("button");
+        main.type = "button";
+        main.className = "chat-history-main";
+        main.innerHTML = `<span class="chat-history-name">${esc(chat.title || "Новый чат")}</span>` +
+          `<span class="chat-history-date">${esc(fmtChatDate(chat.updatedAt || chat.createdAt))}</span>`;
+        main.addEventListener("click", () => openChat(chat.id));
+
+        const del = document.createElement("button");
+        del.type = "button";
+        del.className = "btn icon ghost chat-delete";
+        del.textContent = "×";
+        del.title = "Удалить чат";
+        del.style.display = String(chat.userId) === String(currentUserId) ? "" : "none";
+        del.addEventListener("click", (e) => {
+          e.stopPropagation();
+          deleteChat(chat.id);
+        });
+
+        item.appendChild(main);
+        item.appendChild(del);
+        historyList.appendChild(item);
+      });
+    }
+
+    function renderStoredMessages(messages) {
+      chatLog.innerHTML = "";
+      if (!messages || !messages.length) {
+        renderWelcome();
+        return;
+      }
+      messages.forEach((message) => {
+        if (message.role === "user") {
+          addUserMsg(message.content || "");
+        } else if (message.role === "assistant") {
+          const payload = message.payload && Object.keys(message.payload).length ? message.payload : { reply: message.content || "" };
+          if (!payload.reply) payload.reply = message.content || "";
+          renderResult(payload);
+        } else {
+          renderResult({ reply: `[${message.role}] ${message.content || ""}` });
+        }
+      });
+    }
+
+    async function loadHistory(openRecent) {
+      setHistoryState("Загрузка истории…");
+      try {
+        const query = selectedChatUserId && selectedChatUserId !== currentUserId
+          ? "?user_id=" + encodeURIComponent(selectedChatUserId)
+          : "";
+        const data = await api("GET", "/api/assistant/chats" + query);
+        chats = data.items || [];
+        renderHistory();
+        if (!chats.length) {
+          activeChatId = null;
+          activeChatOwnerId = selectedChatUserId;
+          setHistoryState("История пуста");
+          renderWelcome();
+          applyChatReadonly();
+          return;
+        }
+        setHistoryState("");
+        if (activeChatId && chats.some((chat) => chat.id === activeChatId)) {
+          renderHistory();
+          applyChatReadonly();
+          return;
+        }
+        if (openRecent !== false) {
+          await openChat(chats[0].id);
+        }
+        applyChatReadonly();
+      } catch (err) {
+        setHistoryState("Ошибка загрузки: " + err.message, "err");
+        if (!activeChatId) renderWelcome();
+        applyChatReadonly();
+      }
+    }
+
+    async function openChat(chatId) {
+      if (!chatId) return;
+      activeChatId = chatId;
+      renderHistory();
+      chatLog.innerHTML = '<div class="loading"><span class="spinner"></span> Загрузка чата…</div>';
+      setSaveState("Загрузка чата…");
+      try {
+        const data = await api("GET", `/api/assistant/chats/${chatId}`);
+        activeChatId = data.id;
+        activeChatOwnerId = String(data.userId || selectedChatUserId || currentUserId);
+        renderStoredMessages(data.messages || []);
+        setSaveState("");
+        closeHistoryMobile();
+        renderHistory();
+        applyChatReadonly();
+      } catch (err) {
+        chatLog.innerHTML = "";
+        renderResult({ reply: "Ошибка загрузки чата: " + err.message });
+        setSaveState("Ошибка загрузки чата", "err");
+      }
+    }
+
+    async function createNewChat() {
+      if (isViewingForeignChat()) {
+        toast("Чужая история доступна только для просмотра", "err");
+        return;
+      }
+      setSaveState("Создание нового чата…");
+      try {
+        const data = await api("POST", "/api/assistant/chats", {});
+        activeChatId = data.id;
+        await loadHistory(false);
+        renderStoredMessages(data.messages || []);
+        setSaveState("Новый чат создан");
+        closeHistoryMobile();
+      } catch (err) {
+        setSaveState("Ошибка создания чата", "err");
+        toast(err.message, "err");
+      }
+    }
+
+    async function deleteChat(chatId) {
+      if (isViewingForeignChat()) {
+        toast("Чужая история доступна только для просмотра", "err");
+        return;
+      }
+      if (!chatId || !confirm("Удалить этот чат?")) return;
+      setSaveState("Удаление чата…");
+      try {
+        await api("DELETE", `/api/assistant/chats/${chatId}`);
+        if (activeChatId === chatId) activeChatId = null;
+        await loadHistory(true);
+        setSaveState("Чат удалён");
+      } catch (err) {
+        setSaveState("Ошибка удаления чата", "err");
+        toast(err.message, "err");
+      }
+    }
+
+    async function saveAssistantSnapshot(payload) {
+      if (!activeChatId) return;
+      try {
+        await api("POST", `/api/assistant/chats/${activeChatId}/messages`, {
+          role: "assistant",
+          content: payload.reply || "",
+          payload,
+        });
+        await loadHistory(false);
+      } catch (err) {
+        setSaveState("Ошибка сохранения сообщения", "err");
+      }
+    }
+
     async function send(message) {
+      if (isViewingForeignChat()) {
+        toast("Чужая история доступна только для просмотра", "err");
+        return;
+      }
       addUserMsg(message);
       const typing = typingIndicator();
+      setFormBusy(true);
+      setSaveState("Сохранение сообщения…");
       try {
-        const data = await api("POST", "/api/chat", { message });
+        const data = await api("POST", "/api/chat", { message, conversation_id: activeChatId });
+        activeChatId = data.conversation_id || activeChatId;
         typing.remove();
         renderResult(data);
+        await loadHistory(false);
+        setSaveState("Сохранено");
         if (window.refreshNotifications) window.refreshNotifications();
       } catch (err) {
         typing.remove();
         renderResult({ reply: "Ошибка: " + err.message });
+        setSaveState("Ошибка сохранения сообщения", "err");
+      } finally {
+        setFormBusy(false);
+        input.focus();
       }
     }
     window.chatSend = send;
@@ -394,6 +1018,26 @@
       input.value = "";
       send(v);
     });
+
+    newChatButtons.forEach((btn) => btn.addEventListener("click", createNewChat));
+
+    if (chatUserSelect) {
+      chatUserSelect.addEventListener("change", () => {
+        selectedChatUserId = String(chatUserSelect.value || currentUserId);
+        activeChatId = null;
+        activeChatOwnerId = selectedChatUserId;
+        loadHistory(true);
+        applyChatReadonly();
+      });
+    }
+    if (chatUserSearch && chatUserSelect) {
+      chatUserSearch.addEventListener("input", () => {
+        const q = chatUserSearch.value.trim().toLowerCase();
+        Array.from(chatUserSelect.options).forEach((option) => {
+          option.hidden = !!q && option.textContent.toLowerCase().indexOf(q) === -1;
+        });
+      });
+    }
 
     document.querySelectorAll("[data-suggest]").forEach((b) => {
       b.addEventListener("click", () => send(b.getAttribute("data-suggest")));
@@ -407,19 +1051,53 @@
         const typing = typingIndicator();
         const fd = new FormData();
         fd.append("file", file);
+        if (activeChatId) fd.append("conversation_id", activeChatId);
+        setSaveState("Сохранение документа…");
         try {
           const res = await fetch(BASE + "/chat/upload", { method: "POST", body: fd });
           const data = await res.json();
+          if (!res.ok) throw new Error(data.detail || res.statusText);
+          activeChatId = data.conversation_id || activeChatId;
           typing.remove();
-          if ((data.warnings || []).length) data.warnings = data.warnings;
           renderResult(data);
+          await loadHistory(false);
+          setSaveState("Документ сохранён");
         } catch (err) {
           typing.remove();
           renderResult({ reply: "Не удалось обработать файл: " + err.message });
+          setSaveState("Ошибка сохранения документа", "err");
         }
         uploadInput.value = "";
       });
     }
+
+    if (historyToggle) {
+      historyToggle.addEventListener("click", () => {
+        if (chatMq.matches) closeHistoryMobile();
+        else applyHistoryCollapsed(!shell.classList.contains("chat-history-collapsed"));
+      });
+    }
+    if (historyMobile && shell) {
+      historyMobile.addEventListener("click", () => {
+        shell.classList.remove("chat-history-collapsed");
+        shell.classList.toggle("chat-history-mobile-open");
+      });
+    }
+    if (sideToggle) {
+      sideToggle.addEventListener("click", () => {
+        applySideCollapsed(!shell.classList.contains("chat-side-collapsed"));
+      });
+    }
+    document.addEventListener("click", (e) => {
+      if (!chatMq.matches || !shell || !shell.classList.contains("chat-history-mobile-open")) return;
+      const panel = document.getElementById("chat-history-panel");
+      if (panel && !panel.contains(e.target) && e.target !== historyMobile) closeHistoryMobile();
+    });
+    chatMq.addEventListener("change", () => closeHistoryMobile());
+
+    applyHistoryCollapsed(localStorage.getItem(CHAT_HISTORY_COLLAPSED_KEY) === "1");
+    applySideCollapsed(localStorage.getItem(CHAT_SIDE_COLLAPSED_KEY) === "1");
+    loadHistory(true);
   }
 
   /* =====================================================================
@@ -680,6 +1358,10 @@
     const countEl = document.getElementById("travel-count");
     const modeIcon = { plane: "✈️", train: "🚆", bus: "🚌" };
     const modeRu = { plane: "Авиа", train: "ЖД", bus: "Автобус" };
+    const todayIso = () => {
+      const d = new Date();
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    };
 
     document.querySelectorAll("[data-route]").forEach((b) => {
       b.addEventListener("click", () => {
@@ -689,18 +1371,51 @@
       });
     });
 
+    function showTravelError(message) {
+      countEl.textContent = "";
+      results.innerHTML = `<div class="alert error">${escHtml(message)}</div>`;
+    }
+
+    function sourceCard(s) {
+      const mode = modeRu[s.mode] || s.mode || "Билеты";
+      const ret = s.return_date ? ` · обратно ${escHtml(s.return_date)}` : "";
+      return (
+        `<div class="ticket-card source-card">` +
+        `<div class="tc-mode">${modeIcon[s.mode] || "🔎"}<span>${escHtml(mode)}</span></div>` +
+        `<div class="tc-main">` +
+        `<div class="tc-time"><b>${escHtml(s.title || s.provider)}</b></div>` +
+        `<div class="tc-sub muted">${escHtml(s.origin)} → ${escHtml(s.destination)} · ${escHtml(s.depart_date)}${ret}</div>` +
+        `<div class="tc-sub muted">${escHtml(s.note || "Актуальные цены и места откроются на сайте-источнике.")}</div>` +
+        `</div>` +
+        `<div class="tc-price"><div class="price">${escHtml(s.provider)}</div>` +
+        `<a class="btn small primary" href="${escHtml(s.url)}" target="_blank" rel="noopener">Открыть</a></div>` +
+        `</div>`
+      );
+    }
+
     function card(o) {
       const h = Math.floor(o.duration_minutes / 60), m = o.duration_minutes % 60;
       const tr = o.transfers > 0 ? `пересадок: ${o.transfers}` : "без пересадок";
+      const duration = o.duration_minutes > 0 ? `${h}ч ${String(m).padStart(2, "0")}м` : "длительность уточняется";
+      const time = o.time_precision === "date"
+        ? `<b>${fmtDateTime(o.depart_at)}</b> · время уточняется`
+        : `<b>${fmtDateTime(o.depart_at)}</b> → <b>${fmtTime(o.arrive_at)}</b>`;
+      const seats = o.available_seats != null ? ` · мест: ${escHtml(o.available_seats)}` : "";
+      const carrier = o.carrier || o.provider || modeRu[o.mode] || o.mode;
+      const action = o.url
+        ? `<a class="btn small primary" href="${escHtml(o.url)}" target="_blank" rel="noopener">Купить</a>`
+        : `<span class="btn small ghost disabled" aria-disabled="true">Ссылка недоступна</span>`;
       return (
         `<div class="ticket-card">` +
         `<div class="tc-mode">${modeIcon[o.mode] || "🎫"}<span>${escHtml(modeRu[o.mode] || o.mode)}</span></div>` +
         `<div class="tc-main">` +
-        `<div class="tc-time"><b>${fmtDateTime(o.depart_at)}</b> → <b>${fmtTime(o.arrive_at)}</b></div>` +
-        `<div class="tc-sub muted">${o.origin} → ${o.destination} · ${h}ч ${String(m).padStart(2, "0")}м · ${tr} · ${escHtml(o.provider)}</div>` +
+        `<div class="tc-time">${time}</div>` +
+        `<div class="tc-carrier">${escHtml(carrier)}</div>` +
+        `<div class="tc-sub muted">${escHtml(o.origin)} → ${escHtml(o.destination)} · ${duration} · ${tr}${seats}</div>` +
+        `<div class="tc-sub muted">provider: ${escHtml(o.provider || "—")}</div>` +
         `</div>` +
         `<div class="tc-price"><div class="price">${Math.round(o.price)} ${escHtml(o.currency)}</div>` +
-        `<a class="btn small primary" href="${escHtml(o.url)}" target="_blank" rel="noopener">Купить</a></div>` +
+        action + `</div>` +
         `</div>`
       );
     }
@@ -709,29 +1424,62 @@
       e.preventDefault();
       const f = travelForm.elements;
       const origin = f["origin"].value.trim(), destination = f["destination"].value.trim();
-      if (!origin || !destination) return;
-      const params = new URLSearchParams({ origin, destination, transport: f["transport"].value });
-      if (f["date"].value) params.set("date", f["date"].value);
+      const date = f["date"].value;
+      const returnDate = f["return_date"].value;
+      const passengers = parseInt(f["passengers"].value, 10);
+      if (!origin) return showTravelError("Укажите город отправления.");
+      if (!destination) return showTravelError("Укажите город прибытия.");
+      if (origin.toLocaleLowerCase("ru-RU") === destination.toLocaleLowerCase("ru-RU")) {
+        return showTravelError("Город отправления и прибытия не должны совпадать.");
+      }
+      if (!date) return showTravelError("Укажите дату отправления.");
+      if (date < todayIso()) return showTravelError("Дата отправления не может быть в прошлом.");
+      if (returnDate && returnDate < date) return showTravelError("Дата возвращения не может быть раньше даты отправления.");
+      if (!passengers || passengers < 1 || passengers > 9) return showTravelError("Количество пассажиров должно быть от 1 до 9.");
+
       const budget = parseFloat(f["budget"].value);
       const prefs = Array.from(travelForm.querySelectorAll("input[name=pref]:checked")).map((c) => c.value);
+      let sort = f["sort"].value;
+      if (prefs.includes("fastest")) sort = "duration";
+      if (prefs.includes("cheapest")) sort = "price";
+      const params = new URLSearchParams({
+        origin,
+        destination,
+        date,
+        transport: f["transport"].value,
+        passengers: String(passengers),
+        sort,
+      });
+      if (returnDate) params.set("return_date", returnDate);
 
       results.innerHTML = spinner("Ищу варианты…");
       countEl.textContent = "";
       try {
-        let data = await window.api("GET", "/api/tickets/search?" + params.toString());
+        const payload = await window.api("GET", "/api/tickets/search?" + params.toString());
+        let data = Array.isArray(payload) ? payload : (payload.items || []);
+        const sources = Array.isArray(payload) ? [] : (payload.external_searches || []);
         if (!isNaN(budget) && budget > 0) data = data.filter((o) => o.price <= budget);
         if (prefs.includes("direct")) data = data.filter((o) => o.transfers === 0);
-        if (prefs.includes("fastest")) data = data.slice().sort((a, b) => a.duration_minutes - b.duration_minutes);
+        if (sort === "duration") data = data.slice().sort((a, b) => a.duration_minutes - b.duration_minutes);
+        else if (sort === "departure") data = data.slice().sort((a, b) => new Date(a.depart_at) - new Date(b.depart_at));
         else data = data.slice().sort((a, b) => a.price - b.price);
 
+        if (!data.length && sources.length) {
+          countEl.textContent = `источников: ${sources.length}`;
+          const msg = payload.message
+            ? `<div class="alert info">${escHtml(payload.message)}</div>`
+            : "";
+          results.innerHTML = msg + sources.map(sourceCard).join("");
+          return;
+        }
         if (!data.length) {
-          results.innerHTML = `<div class="empty-state"><div class="big">🤷</div>Под условия ничего не нашлось. Смягчите бюджет или предпочтения.</div>`;
+          results.innerHTML = `<div class="empty-state"><div class="big">🎫</div>По заданным параметрам билетов не найдено.</div>`;
           return;
         }
         countEl.textContent = `найдено: ${data.length}`;
-        results.innerHTML = data.map(card).join("");
+        results.innerHTML = data.map(card).join("") + (sources.length ? sources.map(sourceCard).join("") : "");
       } catch (err) {
-        results.innerHTML = `<div class="alert error">${escHtml(err.message)}</div>`;
+        showTravelError(err.message || "API поиска билетов недоступен.");
       }
     });
   }

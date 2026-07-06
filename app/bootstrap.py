@@ -154,6 +154,8 @@ def _seed_events(db: Session, users: dict[str, User], admin: User, tz: str, now:
         prio = spec.get("prio", 5)
         event = CalendarEvent(
             owner_id=owner.id,
+            created_by_id=owner.id,
+            updated_by_id=owner.id,
             title=spec["title"],
             description=spec.get("desc", ""),
             start_at=start,

@@ -27,7 +27,12 @@ class User(Base):
         DateTime, server_default=func.now(), nullable=False
     )
 
-    events = relationship("CalendarEvent", back_populates="owner", cascade="all, delete-orphan")
+    events = relationship(
+        "CalendarEvent",
+        back_populates="owner",
+        cascade="all, delete-orphan",
+        foreign_keys="CalendarEvent.owner_id",
+    )
 
     @property
     def is_admin(self) -> bool:

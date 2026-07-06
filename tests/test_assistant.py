@@ -12,9 +12,16 @@ from app.core.config import Settings
 from app.core.database import Base
 from app.core.security import hash_password
 from app.models.calendar import STATUS_PLANNED, CalendarEvent
-from app.models.user import ROLE_USER, User
+from app.models.user import ROLE_ADMIN, ROLE_USER, User
 from app.services import availability, conflict_resolver
-from app.services.assistant import normalizer, protocol_generator, travel_search
+from app.services.assistant import (
+    calendar_context,
+    chat_history,
+    normalizer,
+    orchestrator,
+    protocol_generator,
+    travel_search,
+)
 from app.services.conflict_resolver import (
     ACTION_ASK_CONFIRMATION,
     ACTION_PROPOSE_RESCHEDULE_LOWER,
@@ -24,6 +31,7 @@ from app.services.conflict_resolver import (
 )
 
 SETTINGS = Settings()  # значения по умолчанию: рабочие часы 09–19, порог high=8
+SETTINGS.tickets.mode = "mock"
 NOW = datetime(2026, 7, 6, 8, 0)  # понедельник
 
 
@@ -202,7 +210,7 @@ def test_travel_buffer_warning_between_offline(db, user):
 # Поиск билетов (mock provider)                                               #
 # --------------------------------------------------------------------------- #
 def test_travel_mock_search_returns_options():
-    opts = travel_search.search(SETTINGS, "Москва", "Казань", datetime(2026, 7, 8), "any")
+    opts = travel_search.search(SETTINGS, "Москва", "Казань", datetime(2030, 7, 8), "any")
     assert opts, "mock-провайдер должен вернуть варианты"
     assert all(o.price > 0 and o.duration_minutes > 0 for o in opts)
     modes = {o.mode for o in opts}
@@ -212,8 +220,149 @@ def test_travel_mock_search_returns_options():
 
 
 def test_travel_mock_filters_by_transport():
-    opts = travel_search.search(SETTINGS, "Москва", "Сочи", datetime(2026, 7, 8), "flight")
+    opts = travel_search.search(SETTINGS, "Москва", "Сочи", datetime(2030, 7, 8), "flight")
     assert opts and all(o.mode == "plane" for o in opts)
+
+
+def test_travel_provider_without_key_does_not_fallback_to_mock(monkeypatch):
+    s = Settings()
+    s.tickets.mode = "provider"
+    s.tickets.provider.name = "travelpayouts"
+    s.tickets.provider.api_key = ""
+    monkeypatch.delenv("SMARTCAL_TICKETS_API_KEY", raising=False)
+
+    with pytest.raises(travel_search.TicketProviderNotConfigured):
+        travel_search.search(s, "Москва", "Казань", datetime(2030, 7, 8), "flight")
+
+
+def test_travel_search_validates_route_and_date():
+    with pytest.raises(travel_search.TicketValidationError):
+        travel_search.search(SETTINGS, "Москва", "Москва", datetime(2030, 7, 8), "train")
+
+
+def test_travel_site_links_do_not_require_api_key():
+    params = travel_search.build_params("Москва", "Санкт-Петербург", datetime(2030, 7, 8), "any")
+    links = travel_search.external_search_links(params)
+    providers = {link.provider for link in links}
+
+    assert {"Aviasales", "РЖД", "Туту", "Туту Автобусы"} <= providers
+    assert all(link.url.startswith("https://") for link in links)
+
+
+# --------------------------------------------------------------------------- #
+# История чатов ассистента                                                    #
+# --------------------------------------------------------------------------- #
+def test_chat_history_access_is_scoped_to_owner(db, user):
+    other = User(email="other@test.local", password_hash=hash_password("x"), role=ROLE_USER, is_active=True)
+    admin = User(email="admin@test.local", password_hash=hash_password("x"), role=ROLE_ADMIN, is_active=True)
+    db.add_all([other, admin])
+    db.commit()
+    db.refresh(other)
+    db.refresh(admin)
+
+    own_chat = chat_history.create_chat(db, user.id, "Мой чат")
+    other_chat = chat_history.create_chat(db, other.id, "Чужой чат")
+    chat_history.add_message(db, own_chat, "user", "Привет")
+    chat_history.add_message(db, own_chat, "assistant", "Здравствуйте")
+
+    assert chat_history.get_accessible_chat(db, user, own_chat.id).id == own_chat.id
+    assert chat_history.get_accessible_chat(db, user, other_chat.id) is None
+    assert chat_history.get_accessible_chat(db, admin, other_chat.id).id == other_chat.id
+
+    payload = chat_history.serialize_chat(chat_history.get_chat(db, own_chat.id), include_messages=True)
+    assert payload["userId"] == user.id
+    assert [m["role"] for m in payload["messages"]] == ["user", "assistant"]
+
+
+# --------------------------------------------------------------------------- #
+# Assistant calendar context                                                  #
+# --------------------------------------------------------------------------- #
+def test_calendar_context_resolves_employee_and_respects_access(db, user):
+    admin = User(
+        email="admin@test.local",
+        full_name="Admin",
+        password_hash=hash_password("x"),
+        role=ROLE_ADMIN,
+        is_active=True,
+    )
+    maria = User(
+        email="maria@test.local",
+        full_name="Мария Кузнецова",
+        password_hash=hash_password("x"),
+        role=ROLE_USER,
+        is_active=True,
+    )
+    db.add_all([admin, maria])
+    db.commit()
+    db.refresh(admin)
+    db.refresh(maria)
+    _add_event(db, maria.id, 6, 10, 11, title="Занято у Марии")
+
+    target = calendar_context.resolve_employee_query(db, SETTINGS, admin, "Маши Кузнецовой")
+    assert target.id == maria.id
+
+    requested = calendar_context.DateRange(
+        datetime(2026, 7, 6, 0, 0),
+        datetime(2026, 7, 7, 0, 0),
+        "сегодня",
+    )
+    payload = calendar_context.employee_availability(
+        db, SETTINGS, admin, maria, requested, requested_slot_duration=60
+    )
+    assert payload["employeeId"] == maria.id
+    assert payload["busyIntervals"]
+    assert payload["availableSlots"]
+    for slot in payload["availableSlots"]:
+        start = datetime.fromisoformat(slot["start_at"])
+        end = datetime.fromisoformat(slot["end_at"])
+        assert not (start < datetime(2026, 7, 6, 11, 0) and end > datetime(2026, 7, 6, 10, 0))
+
+    with pytest.raises(calendar_context.CalendarAccessDenied):
+        calendar_context.resolve_employee_query(db, SETTINGS, user, "Маши Кузнецовой")
+
+
+def test_orchestrator_employee_slots_for_admin_only(db, user):
+    admin = User(
+        email="admin2@test.local",
+        full_name="Admin",
+        password_hash=hash_password("x"),
+        role=ROLE_ADMIN,
+        is_active=True,
+    )
+    maria = User(
+        email="maria2@test.local",
+        full_name="Мария Кузнецова",
+        password_hash=hash_password("x"),
+        role=ROLE_USER,
+        is_active=True,
+    )
+    db.add_all([admin, maria])
+    db.commit()
+    db.refresh(admin)
+    db.refresh(maria)
+    _add_event(db, maria.id, 6, 10, 11, title="Фокус")
+
+    res = orchestrator.run(
+        SETTINGS,
+        db,
+        admin,
+        "Покажи свободные слоты Маши Кузнецовой на сегодня",
+        now=NOW,
+    )
+    assert res.status == "done"
+    assert res.cards and res.cards[0].kind == "employee_availability"
+    assert res.cards[0].data["items"][0]["employeeId"] == maria.id
+    assert res.alternative_slots
+
+    denied = orchestrator.run(
+        SETTINGS,
+        db,
+        user,
+        "Покажи свободные слоты Маши Кузнецовой на сегодня",
+        now=NOW,
+    )
+    assert denied.status == "error"
+    assert "нет доступа" in denied.reply.lower()
 
 
 # --------------------------------------------------------------------------- #

@@ -84,16 +84,25 @@ scheduling:
   realistic_offline_max_travel_minutes: 300  # дольше — предлагаем онлайн
   high_priority_threshold: 8              # выше — нельзя автоматически сдвигать
 
-# Поиск билетов/поездок. mock — генерирует правдоподобные варианты локально.
+# Поиск билетов/поездок.
+# sites — без ключей: приложение строит поиск на реальных сайтах (Aviasales,
+# РЖД, Туту/автобусы) и показывает карточки источников. Это не fake-результаты:
+# цены, места и покупка открываются на сайте-источнике.
+# provider — внешний API, если нужно получать цены прямо в карточки приложения.
+# mock — только для локального demo/test.
 tickets:
-  mode: "mock"            # mock | provider
+  mode: "sites"           # sites | provider | mock
   # Средняя скорость (км/ч) для оценки времени в дороге, если провайдер не отдаёт длительность.
   avg_speed_kmh: 65
   currency: "RUB"
   same_day_return_max_hours: 10
   provider:
-    name: "generic"
+    # travelpayouts/aviasales — адаптер Aviasales Data API для авиабилетов.
+    # generic/http — ваш нормализованный HTTP endpoint для авиа/ЖД/автобусов.
+    name: "site_links"
     base_url: ""
+    # Секрет можно держать в переменной окружения, не в YAML.
+    api_key_env: "SMARTCAL_TICKETS_API_KEY"
     api_key: ""
     timeout: 30
 

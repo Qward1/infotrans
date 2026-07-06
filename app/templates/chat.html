@@ -1,18 +1,56 @@
 {% extends "base.html" %}
 {% block title %}Ассистент · {{ app_name }}{% endblock %}
 {% block page_title %}Ассистент{% endblock %}
-{% block page_subtitle %}Режим: {{ assistant_mode }} · чат по календарю, слотам и билетам{% endblock %}
+{% block page_subtitle %}Чат по календарю, слотам и билетам{% endblock %}
 
 {% block content %}
-<div class="chat-shell">
-  <section class="chat-panel glass">
-    <div class="chat-log" id="chat-log">
-      <div class="msg bot">
-        Здравствуйте, {{ current_user.full_name or current_user.email }}! Я ассистент умного календаря.
-        Я работаю в demo-режиме и уже умею искать свободные окна, конфликты и билеты.
-        Спросите, например: «Когда я свободен на этой неделе?»
-        <span class="meta">интент: help · режим: {{ assistant_mode }}</span>
+<div
+  class="chat-shell"
+  id="assistant-shell"
+  data-current-user-id="{{ current_user.id }}"
+  data-is-admin="{{ '1' if current_user.is_admin else '0' }}"
+>
+  <aside class="chat-history glass" id="chat-history-panel" aria-label="История чатов">
+    <div class="chat-history-head">
+      <div class="chat-history-title">
+        <strong>История</strong>
+        <span id="chat-history-count" class="a-muted"></span>
       </div>
+      <button class="btn icon ghost" id="chat-history-toggle" type="button" aria-label="Свернуть историю">‹</button>
+    </div>
+    {% if current_user.is_admin %}
+    <div class="chat-admin-view">
+      <label for="chat-user-select">Чаты сотрудника</label>
+      <input id="chat-user-search" placeholder="Поиск сотрудника" autocomplete="off" />
+      <select id="chat-user-select">
+        <option value="{{ current_user.id }}">Свои чаты · {{ current_user.full_name or current_user.email }}</option>
+        {% for u in chat_users %}
+          {% if u.id != current_user.id %}
+          <option value="{{ u.id }}">{{ u.full_name or u.email }} · {{ u.email }}</option>
+          {% endif %}
+        {% endfor %}
+      </select>
+      <div class="a-muted" id="chat-readonly-note" style="display:none;">История другого пользователя открыта только для просмотра.</div>
+    </div>
+    {% endif %}
+    <button class="btn primary small chat-new-btn" id="chat-new" type="button">＋ Новый чат</button>
+    <div class="chat-history-state" id="chat-history-state">Загрузка истории…</div>
+    <div class="chat-history-list" id="chat-history-list"></div>
+  </aside>
+
+  <section class="chat-panel glass">
+    <div class="chat-panel-head">
+      <div class="flex items-center gap-8 wrap">
+        <button class="btn small ghost" id="chat-history-mobile" type="button">История</button>
+        <button class="btn small ghost" id="chat-new-inline" type="button">Новый чат</button>
+      </div>
+      <div class="chat-save-state a-muted" id="chat-save-state"></div>
+    </div>
+    <div
+      class="chat-log"
+      id="chat-log"
+      data-greeting="Здравствуйте, {{ current_user.full_name or current_user.email }}! Я ассистент умного календаря. Помогу найти свободные окна, проверить конфликты и подобрать билеты. Спросите, например: «Когда я свободен на этой неделе?»"
+    >
     </div>
     <form class="chat-input" id="chat-form">
       <input type="file" id="chat-file" accept=".txt,.md,.pdf,.docx" style="display:none" />
@@ -22,9 +60,12 @@
     </form>
   </section>
 
-  <aside class="chat-side">
-    <div class="card glass">
+  <aside class="chat-side glass" id="chat-side-panel" aria-label="Подсказки ассистента">
+    <div class="chat-side-head">
       <h3>Примеры запросов</h3>
+      <button class="btn icon ghost" id="chat-side-toggle" type="button" aria-label="Свернуть подсказки">›</button>
+    </div>
+    <div class="chat-side-content">
       <div class="hint" style="margin-bottom:12px;">Нажмите, чтобы отправить</div>
       <div class="suggest">
         <button class="btn small ghost" data-suggest="Поставь встречу с Анной завтра в 15:00 на час">📅 Поставь встречу с Анной завтра в 15:00 на час</button>
@@ -32,26 +73,6 @@
         <button class="btn small ghost" data-suggest="Найди свободное окно с Иваном на пятницу">🟢 Найди свободное окно с Иваном на пятницу</button>
         <button class="btn small ghost" data-suggest="Найди билеты Москва — Санкт-Петербург на завтра">🎫 Найди билеты Москва — Санкт-Петербург на завтра</button>
         <button class="btn small ghost" data-suggest="Сформируй протокол из загруженного документа">📝 Сформируй протокол из загруженного документа</button>
-      </div>
-    </div>
-
-    <div class="card glass">
-      <h3>Возможности</h3>
-      <div class="hint">
-        • нормализация запроса → строгий JSON-интент<br />
-        • создание/перенос/удаление встреч (с подтверждением)<br />
-        • свободные слоты для нескольких участников<br />
-        • конфликт-резолвинг по приоритету + буфер на дорогу<br />
-        • подбор авиа/жд билетов (mock/provider)<br />
-        • протокол из PDF/DOCX + встречи по протоколу
-      </div>
-    </div>
-
-    <div class="card glass">
-      <h3>Режим</h3>
-      <div class="hint">
-        Ассистент: <strong>{{ assistant_mode }}</strong><br />
-        {% if assistant_mode == 'local' %}Работает локальный нормализатор (без внешних ключей). Dify включается в <a href="{{ base }}/settings">настройках</a>.{% else %}Запросы идут в Dify с fallback на локальный режим.{% endif %}
       </div>
     </div>
   </aside>
