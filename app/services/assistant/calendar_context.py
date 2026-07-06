@@ -168,7 +168,7 @@ def extract_employee_queries(text: str) -> list[str]:
     fragments: list[str] = []
     patterns = [
         r"\bу\s+(.+)$",
-        r"\b(?:слоты|окна|окно|время|занятость|расписание)\s+(.+)$",
+        r"\b(?:слоты|окна|окно|окошк\w*|время|занятость|расписание)\s+(.+)$",
         r"\bс\s+([А-ЯЁA-Z][^,.?!]+)$",
     ]
     for pattern in patterns:

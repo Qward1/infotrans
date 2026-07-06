@@ -346,12 +346,13 @@ def test_orchestrator_employee_slots_for_admin_only(db, user):
         SETTINGS,
         db,
         admin,
-        "Покажи свободные слоты Маши Кузнецовой на сегодня",
+        "Свободные окошки Мария Кузнецова",
         now=NOW,
     )
     assert res.status == "done"
     assert res.cards and res.cards[0].kind == "employee_availability"
     assert res.cards[0].data["items"][0]["employeeId"] == maria.id
+    assert "Мария Кузнецова" in res.reply
     assert res.alternative_slots
 
     denied = orchestrator.run(

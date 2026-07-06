@@ -178,6 +178,26 @@ def test_adaptive_chat_ui_hooks_render(client):
     assert ".chat-shell.chat-side-collapsed" in css
 
 
+def test_travel_page_uses_dedicated_layout(client):
+    settings = get_settings()
+    client.post(
+        "/login",
+        data={"email": settings.seed_admin.email, "password": settings.seed_admin.password},
+    )
+    r = client.get("/travel")
+    assert r.status_code == 200
+    html = r.text
+    assert 'class="travel-shell"' in html
+    assert 'class="travel-main"' in html
+    assert 'class="travel-side"' in html
+    assert 'class="chat-shell"' not in html
+    assert 'class="chat-side"' not in html
+
+    css = client.get("/static/css/app.css").text
+    assert ".travel-shell" in css
+    assert ".travel-side" in css
+
+
 def test_assistant_chat_history_api_scopes_users(client):
     settings = get_settings()
     password = "pass12345"
