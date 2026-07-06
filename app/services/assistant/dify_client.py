@@ -88,14 +88,20 @@ def normalize_via_dify(
     user_email: str | None = None,
     conversation_id: str | None = None,
 ) -> dict:
-    """Прогнать сообщение через ассистента ``request_normalizer`` и вернуть JSON-интент."""
+    """Прогнать сообщение через ассистента ``request_normalizer`` и вернуть JSON-интент.
+
+    ``conversation_id`` здесь — это ID нашей сессии в приложении, а не ID диалога
+    Dify (мы не сохраняем conversation_id, который возвращает сам Dify). Пересылать
+    свой ID в Dify нельзя: Dify примет только ID, который сам ранее выдал, а для
+    незнакомого ID отвечает 404 "Conversation Not Found". Поэтому каждый вызов
+    нормализатора идёт как новый (stateless) диалог Dify.
+    """
     result = call_chat(
         settings,
         assistant="request_normalizer",
         message=message,
         inputs={"user_tz": settings.app.timezone},
         user_email=user_email,
-        conversation_id=conversation_id,
     )
     answer = result["answer"]
     if isinstance(answer, dict):
