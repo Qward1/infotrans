@@ -34,7 +34,7 @@
           </td>
           <td>{{ u.email }}</td>
           <td>
-            {% if u.role == 'admin' %}<span class="badge badge-admin">admin</span>{% else %}<span class="badge badge-user">user</span>{% endif %}
+            {% if u.role == 'admin' %}<span class="badge badge-admin">админ</span>{% else %}<span class="badge badge-user">пользователь</span>{% endif %}
           </td>
           <td>
             {% if u.is_active %}<span class="chip green">активен</span>{% else %}<span class="chip red">отключён</span>{% endif %}

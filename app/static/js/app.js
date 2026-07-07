@@ -829,6 +829,13 @@
       if (!historyList) return;
       historyList.innerHTML = "";
       if (historyCount) historyCount.textContent = chats.length ? `${chats.length}` : "";
+      if (!chats.length) {
+        historyList.innerHTML =
+          '<div class="chat-history-empty"><span class="ic">💬</span>' +
+          "Здесь появятся ваши чаты.<br>Начните новый разговор." +
+          "</div>";
+        return;
+      }
       chats.forEach((chat) => {
         const item = document.createElement("div");
         item.className = "chat-history-item" + (chat.id === activeChatId ? " active" : "");
@@ -876,8 +883,17 @@
       });
     }
 
+    function showHistorySkeleton() {
+      if (!historyList) return;
+      historyList.innerHTML =
+        '<div class="chat-history-skeleton">' +
+        '<div class="sk"></div><div class="sk"></div><div class="sk"></div><div class="sk"></div>' +
+        "</div>";
+    }
+
     async function loadHistory(openRecent) {
-      setHistoryState("Загрузка истории…");
+      setHistoryState("");
+      if (!chats.length) showHistorySkeleton();
       try {
         const query = selectedChatUserId && selectedChatUserId !== currentUserId
           ? "?user_id=" + encodeURIComponent(selectedChatUserId)
@@ -888,7 +904,7 @@
         if (!chats.length) {
           activeChatId = null;
           activeChatOwnerId = selectedChatUserId;
-          setHistoryState("История пуста");
+          setHistoryState("");
           renderWelcome();
           applyChatReadonly();
           return;

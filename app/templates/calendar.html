@@ -12,7 +12,7 @@
 {% if current_user.is_admin %}
 <section class="admin-calendar-switch glass panel" id="admin-calendar-switch">
   <div class="admin-calendar-current">
-    <span class="badge badge-admin">admin view</span>
+    <span class="badge badge-admin">режим админа</span>
     <strong id="calendar-owner-label">
       {% if calendar_payload.owner.is_current_user %}
         Свой календарь
@@ -58,16 +58,16 @@
   <div class="cal-range" id="calendar-range">{{ calendar_payload.label }}</div>
 
   <div class="view-switch" role="group" aria-label="Вид календаря">
-    <button type="button" class="btn small {{ 'primary' if calendar_payload.view == 'day' else 'ghost' }}" data-cal-view="day">Day</button>
-    <button type="button" class="btn small {{ 'primary' if calendar_payload.view == 'week' else 'ghost' }}" data-cal-view="week">Week</button>
-    <button type="button" class="btn small {{ 'primary' if calendar_payload.view == 'month' else 'ghost' }}" data-cal-view="month">Month</button>
+    <button type="button" class="btn small {{ 'primary' if calendar_payload.view == 'day' else 'ghost' }}" data-cal-view="day">День</button>
+    <button type="button" class="btn small {{ 'primary' if calendar_payload.view == 'week' else 'ghost' }}" data-cal-view="week">Неделя</button>
+    <button type="button" class="btn small {{ 'primary' if calendar_payload.view == 'month' else 'ghost' }}" data-cal-view="month">Месяц</button>
   </div>
 
   <div class="flex items-center gap-12 wrap">
     <span class="badge badge-online">● Онлайн</span>
     <span class="badge badge-offline">● Очно</span>
     <span class="badge badge-hybrid">● Гибрид</span>
-    <span class="muted nowrap">TZ: {{ calendar_payload.timezone }}</span>
+    <span class="muted nowrap">Пояс: {{ calendar_payload.timezone }}</span>
   </div>
 </section>
 

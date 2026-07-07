@@ -112,6 +112,50 @@ def normalize_via_dify(
     return parsed
 
 
+def secretary_reply(
+    settings: Settings,
+    message: str,
+    context: dict,
+    user_email: str | None = None,
+    conversation_id: str | None = None,
+) -> str:
+    """Озвучить ответ ассистентом ``smart_calendar_secretary``.
+
+    Секретарь получает исходную реплику пользователя (``query``) и факты бэкенда
+    (``inputs``): интент, статус, детерминированный черновик ответа и структурную
+    сводку. Его задача — вернуть «живой» деловой ответ, НЕ выдумывая фактов сверх
+    переданных. Ответ — JSON ``{"reply": ...}`` (или строка) → возвращаем текст.
+
+    ``conversation_id`` не пересылаем в Dify по той же причине, что и у
+    нормализатора: Dify принимает только выданные им самим id (иначе 404), поэтому
+    контекст диалога уже собран бэкендом и передан в ``inputs``.
+    """
+    inputs = {
+        "user_tz": settings.app.timezone,
+        "backend_intent": str(context.get("intent", "unknown")),
+        "backend_status": str(context.get("status", "info")),
+        "backend_reply": str(context.get("draft_reply", "")),
+        "clarifying_question": str(context.get("clarifying_question", "")),
+        "backend_facts": json.dumps(context, ensure_ascii=False, default=str),
+    }
+    result = call_chat(
+        settings,
+        assistant="smart_calendar_secretary",
+        message=message,
+        inputs=inputs,
+        user_email=user_email,
+    )
+    answer = result["answer"]
+    if isinstance(answer, dict):
+        reply = answer.get("reply")
+        if isinstance(reply, str) and reply.strip():
+            return reply.strip()
+        raise DifyError("smart_calendar_secretary вернул JSON без поля reply")
+    if isinstance(answer, str) and answer.strip():
+        return answer.strip()
+    raise DifyError("smart_calendar_secretary вернул пустой ответ")
+
+
 def _try_parse_json(value):
     if isinstance(value, dict):
         return value

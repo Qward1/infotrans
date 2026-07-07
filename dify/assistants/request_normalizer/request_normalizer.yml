@@ -81,8 +81,9 @@ workflow:
         - id: sys-normalize
           role: system
           text: |
-            Ты — нормализатор запросов умного календаря. По сообщению пользователя определи ОДИН intent
-            и извлеки параметры. Ответ — СТРОГО JSON по схеме, без markdown, без пояснений.
+            Ты — нормализатор запросов русскоязычного ассистента-секретаря умного календаря.
+            По сообщению пользователя определи ОДИН intent и извлеки параметры.
+            Ответ — СТРОГО JSON по схеме, без markdown, без пояснений.
 
             Список intent:
             create_event, update_event, delete_event, show_calendar, find_free_slots, find_tickets,
@@ -95,13 +96,21 @@ workflow:
             - format ∈ {online, offline, hybrid}; для «онлайн/zoom/ссылка» → online, «очно/офис/адрес» → offline.
             - Города для find_tickets клади в travel.origin_city / travel.destination_city (именительный падеж).
             - transport_type ∈ {flight, train, any}.
-            - Участников (email или имена) собирай в event.participants.
+            - Участников (email или имена людей) собирай в event.participants. «встреча с <Имя>» → это
+              участник, а НЕ название: имя клади в participants, title при этом оставляй пустым (тему
+              спросит backend отдельным вопросом).
             - priority — целое 0..10; important/срочно → 8, критично → 10.
             - Заполняй только те поля, что реально названы; остальное оставляй пустым/null.
+            - ВАЖНО про контекст диалога: сообщение может быть коротким ОТВЕТОМ на предыдущий вопрос
+              ассистента (например «завтра на 10», «онлайн», «Тест»). В этом случае всё равно извлекай
+              распознанные значения (дата, время, формат, город) в соответствующие поля event/travel,
+              даже если явного глагола-команды нет и intent приходится оставить unknown. Не выдумывай
+              данные, которых нет.
             - missing_fields — список недостающих обязательных полей для выбранного intent
-              (create_event: title, date, start_time, format; find_tickets: origin_city,
+              (create_event: title, date, start_time; find_tickets: origin_city,
               destination_city, departure_date; delete/update/move: target_event).
-            - Если данных не хватает — заполни clarifying_question (один вопрос по-русски).
+            - Если данных не хватает — заполни clarifying_question ОДНИМ конкретным вопросом по-русски,
+              в вежливом деловом тоне секретаря (например: «На какой день и время назначить встречу?»).
             - confidence — 0..1.
         - id: usr-normalize
           role: user

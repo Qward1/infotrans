@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import uuid
 from datetime import datetime, timedelta
 
@@ -41,6 +42,9 @@ from app.services import conflict_resolver, location_service
 from app.services import users as users_service
 from app.services.assistant import (
     calendar_context,
+    conversation,
+    dify_client,
+    morphology,
     normalizer,
     notification_service,
     protocol_generator,
@@ -172,10 +176,39 @@ def run(
     conversation_id: str | None = None,
     now: datetime | None = None,
 ) -> AssistantResult:
+    """Обработать сообщение и вернуть результат.
+
+    Оркестратор — источник истины: он делает всю работу (нормализация → сервисы →
+    карточки/действия) и формирует детерминированный ``reply``. Если включён Dify,
+    финальный текст ответа «озвучивает» ассистент ``smart_calendar_secretary`` —
+    поверх фактов бэкенда, с мягким откатом на детерминированный текст при сбое.
+    """
     now = now or datetime.now()
     conversation_id = conversation_id or str(uuid.uuid4())
+    result = _run_core(settings, db, user, message, conversation_id, now)
+    _apply_secretary_voice(settings, user, message, result, conversation_id)
+    return result
 
+
+def _run_core(
+    settings: Settings,
+    db: Session,
+    user: User,
+    message: str,
+    conversation_id: str,
+    now: datetime,
+) -> AssistantResult:
+    # Контекст предыдущего хода: если ассистент задавал уточняющий вопрос,
+    # новое сообщение продолжает тот же сценарий, а не начинает новый.
+    prior = conversation.load_prior_turn(db, conversation_id)
     nr = normalizer.normalize(settings, message, user_email=user.email, conversation_id=conversation_id, now=now)
+    if conversation.should_continue(prior, nr):
+        nr = conversation.continue_request(prior, message, now)
+
+    # Обогащение сценария создания встречи: участники по имени, тема, вопрос.
+    if nr.intent == "create_event":
+        _enrich_create_event(settings, db, user, nr)
+
     mode = _MODE_BY_SOURCE.get(nr.source, "local")
 
     result = AssistantResult(
@@ -205,6 +238,12 @@ def run(
             )
         return result
 
+    # Непонятный запрос: приветствие показываем только в начале диалога,
+    # а не посреди сценария (когда уже был обмен репликами).
+    if nr.intent == "unknown":
+        _handle_unknown(settings, db, user, nr, result, now, greet=prior is None)
+        return result
+
     dispatch = {
         "create_event": _handle_create_event,
         "find_free_slots": _handle_find_slots,
@@ -223,6 +262,160 @@ def run(
     return result
 
 
+# --------------------------------------------------------------------------- #
+# «Голос» секретаря: озвучивание ответа ассистентом smart_calendar_secretary   #
+# --------------------------------------------------------------------------- #
+def _secretary_context(result: AssistantResult) -> dict:
+    """Факты бэкенда для секретаря: он перефразирует их, но НЕ выдумывает новые.
+
+    Детерминированный ``reply`` (draft) уже содержит все конкретные факты — даты,
+    имена, счётчики. Отдаём его как «черновик» + структурную сводку, чтобы LLM
+    только улучшил формулировку (тон, грамматику, склонение имён), не искажая суть.
+    """
+    return {
+        "intent": result.intent,
+        "status": result.status,
+        "draft_reply": result.reply,
+        "clarifying_question": result.clarifying_question or "",
+        "missing_fields": result.missing_fields,
+        "cards": [{"kind": c.kind, "title": c.title} for c in result.cards],
+        "actions": [{"type": a.type, "label": a.label} for a in result.suggested_actions],
+        "warnings": result.warnings,
+    }
+
+
+def _apply_secretary_voice(
+    settings: Settings,
+    user: User,
+    message: str,
+    result: AssistantResult,
+    conversation_id: str,
+) -> None:
+    """Заменить детерминированный ответ репликой секретаря (LLM), если включён Dify.
+
+    Бэкенд остаётся источником истины: интент, карточки, действия и статусы уже
+    посчитаны — секретарь меняет только текст ``reply``. Любой сбой → тихо
+    оставляем детерминированный ответ (мягкий откат, как и у нормализатора)."""
+    if not settings.assistant.dify.enabled:
+        return
+    # Если нормализация уже упала на локальный режим — Dify недоступен,
+    # второй вызов только потратит таймаут. Оставляем детерминированный текст.
+    if result.mode == "dify-fallback":
+        return
+    if not (result.reply or "").strip():
+        return
+    try:
+        reply = dify_client.secretary_reply(
+            settings,
+            message,
+            _secretary_context(result),
+            user_email=user.email,
+            conversation_id=conversation_id,
+        )
+    except Exception as exc:  # noqa: BLE001 — намеренно широкий: любой сбой → откат
+        logger.warning("smart_calendar_secretary failed, keep deterministic reply: %s", exc)
+        result.mode = "dify-fallback"
+        return
+    if reply and reply.strip():
+        result.reply = reply.strip()
+
+
+# --------------------------------------------------------------------------- #
+# Обогащение сценария создания встречи                                         #
+# --------------------------------------------------------------------------- #
+_AUTO_TITLE_RE = re.compile(r"(?i)^встреча\s+(?:с|со)\s+(.+)$")
+_NAME_ONLY_RE = re.compile(r"[А-ЯЁA-Z][\w\-]*(?:\s+[А-ЯЁA-Z][\w\-]*)*")
+
+
+def _is_auto_person_title(title: str | None) -> bool:
+    """Является ли название авто-заглушкой «Встреча с <Имя>» (а не реальной темой)."""
+    if not title:
+        return True
+    m = _AUTO_TITLE_RE.match(title.strip())
+    if not m:
+        return False
+    return bool(_NAME_ONLY_RE.fullmatch(m.group(1).strip()))
+
+
+def _resolve_people(db: Session, settings: Settings, actor: User, queries: list[str]) -> tuple[list[User], list[str]]:
+    """Сопоставить имена участников («Маша Кузнецова») пользователям системы."""
+    resolved: list[User] = []
+    unresolved: list[str] = []
+    seen: set[int] = {actor.id}
+    for query in queries:
+        matches = calendar_context.search_employees(
+            db, settings, actor, query, limit=3, include_inaccessible=True
+        )
+        if matches:
+            top = matches[0]
+            if top.id not in seen:
+                resolved.append(top)
+                seen.add(top.id)
+        else:
+            unresolved.append(query)
+    return resolved, unresolved
+
+
+def _participant_names(db: Session, emails: list[str]) -> list[str]:
+    names: list[str] = []
+    for email in emails:
+        u = users_service.get_by_email(db, email)
+        names.append((u.full_name or u.email) if u else email)
+    return names
+
+
+def _join_names(names: list[str], case: str | None = None) -> str:
+    """Склеить имена участников в перечисление. ``case`` (напр. ``"ablt"``) склоняет
+    каждое имя — нужно для фраз «встречу с Марией и Иваном»."""
+    if not names:
+        return ""
+    if case:
+        names = [morphology.inflect_full_name(n, case) for n in names]
+    if len(names) == 1:
+        return names[0]
+    return ", ".join(names[:-1]) + " и " + names[-1]
+
+
+def _event_subject(db: Session, nr: NormalizedRequest) -> str:
+    ev = nr.event
+    if ev.title and not _is_auto_person_title(ev.title):
+        return f"«{ev.title}»"
+    names = _participant_names(db, ev.participants)
+    if names:
+        return "встречу с " + _join_names(names, case=morphology.INSTRUMENTAL)
+    return "встречу"
+
+
+def _create_event_question(db: Session, nr: NormalizedRequest) -> str | None:
+    missing = nr.missing_fields
+    if not missing:
+        return None
+    if "date" in missing or "start_time" in missing:
+        return f"На какой день и время назначить {_event_subject(db, nr)}?"
+    if "title" in missing:
+        return "Какую тему указать для встречи?"
+    return normalizer.build_clarifying_question(missing)
+
+
+def _enrich_create_event(settings: Settings, db: Session, user: User, nr: NormalizedRequest) -> None:
+    ev = nr.event
+    # 1. Участники, названные по имени («встреча с Машей Кузнецовой»).
+    queries = calendar_context.extract_employee_queries(nr.original_text)
+    resolved, _unresolved = _resolve_people(db, settings, user, queries)
+    for participant in resolved:
+        if participant.email not in ev.participants:
+            ev.participants.append(participant.email)
+    # 2. Авто-название «Встреча с <Имя>» не считаем заданной темой —
+    #    участник уже сохранён отдельно, поэтому спросим тему явно.
+    if ev.participants and _is_auto_person_title(ev.title):
+        ev.title = None
+    # 3. Пересчёт недостающих полей и человеко-понятный вопрос.
+    nr.missing_fields = normalizer.compute_missing(nr)
+    question = _create_event_question(db, nr)
+    if question:
+        nr.clarifying_question = question
+
+
 def _prefill_from_nr(nr: NormalizedRequest) -> dict:
     ev = nr.event
     payload: dict = {"source": "assistant"}
@@ -237,6 +430,8 @@ def _prefill_from_nr(nr: NormalizedRequest) -> dict:
         payload["location_type"] = ev.format
     if ev.city:
         payload["city"] = ev.city
+    if ev.participants:
+        payload["participants"] = list(ev.participants)
     return payload
 
 
@@ -325,10 +520,12 @@ def _handle_create_event(settings, db, user, nr, result, now):
         # Есть участники/буфер — подтверждаем.
         action = create_action(db, user, ACTION_CREATE_EVENT, payload["title"], payload)
         result.status = "needs_confirmation"
+        dur_min = int((end - start).total_seconds() // 60)
+        names = _participant_names(db, payload["participants"])
+        with_str = (" с " + _join_names(names, case=morphology.INSTRUMENTAL)) if names else ""
         result.reply = (
-            f"Готов создать встречу «{payload['title']}» {start:%d.%m %H:%M}–{end:%H:%M}"
-            + (f" с {len(others)} участник(ами)." if others else ".")
-            + " Подтвердите создание."
+            f"Готов создать встречу «{payload['title']}»{with_str} "
+            f"{start:%d.%m в %H:%M} ({dur_min} мин). Подтвердите создание."
         )
         result.cards.append(AssistantCard(kind="created_event", title="Черновик встречи", data=payload))
         result.suggested_actions.append(
@@ -811,16 +1008,24 @@ def _resolve_target_event(db, user, nr, now) -> CalendarEvent | None:
     return pool[0] if pool else None
 
 
-def _handle_unknown(settings, db, user, nr, result, now):
+def _handle_unknown(settings, db, user, nr, result, now, greet=True):
     result.status = "info"
-    result.reply = (
-        f"Здравствуйте, {user.full_name or 'коллега'}! Я ассистент-секретарь. Могу:\n"
-        "• создать/перенести/удалить встречу;\n"
-        "• найти свободное время (в т.ч. для нескольких участников);\n"
-        "• подобрать билеты и объяснить варианты;\n"
-        "• собрать протокол из документа и создать встречи по нему.\n"
-        "Например: «Запланируй встречу с командой завтра в 15:00 онлайн»."
-    )
+    if greet:
+        result.reply = (
+            f"Здравствуйте, {user.full_name or 'коллега'}! Я ассистент-секретарь. Могу:\n"
+            "• создать/перенести/удалить встречу;\n"
+            "• найти свободное время (в т.ч. для нескольких участников);\n"
+            "• подобрать билеты и объяснить варианты;\n"
+            "• собрать протокол из документа и создать встречи по нему.\n"
+            "Например: «Запланируй встречу с командой завтра в 15:00 онлайн»."
+        )
+    else:
+        # Середина диалога — без приветствия, просто помогаем сформулировать.
+        result.reply = (
+            "Не совсем понял запрос. Могу создать или перенести встречу, найти свободное "
+            "время, подобрать билеты или собрать протокол. Уточните, что нужно — например: "
+            "«Запланируй встречу с Иваном завтра в 15:00»."
+        )
 
 
 # --------------------------------------------------------------------------- #

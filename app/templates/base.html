@@ -57,7 +57,7 @@
           <div class="meta">
             <div class="name">{{ current_user.full_name or current_user.email }}</div>
             <div class="role">
-              {% if current_user.is_admin %}<span class="badge badge-admin">admin</span>{% else %}<span class="badge badge-user">user</span>{% endif %}
+              {% if current_user.is_admin %}<span class="badge badge-admin">админ</span>{% else %}<span class="badge badge-user">пользователь</span>{% endif %}
             </div>
           </div>
         </div>
