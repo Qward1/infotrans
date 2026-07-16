@@ -2,7 +2,7 @@
 уведомления, протокол по документу."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytest
 from sqlalchemy import create_engine
@@ -98,6 +98,63 @@ def test_protocol_from_document_creates_followup_action(db, user):
     out = orchestrator.confirm_action(db, SETTINGS, user, confirm[0].action_id)
     assert out["ok"] is True
     assert db.query(CalendarEvent).count() >= 1
+
+
+def _make_event(db, user, title="Синк по проекту", start=datetime(2026, 7, 7, 11, 0)):
+    ev = CalendarEvent(
+        owner_id=user.id, created_by_id=user.id, updated_by_id=user.id,
+        title=title, start_at=start, end_at=start + timedelta(hours=1),
+        location_type="online", priority=5,
+    )
+    db.add(ev); db.commit(); db.refresh(ev)
+    return ev
+
+
+def test_cancel_event_sets_status_instead_of_delete(db, user):
+    """BUG-03: «отмени встречу» меняет статус на cancelled, не удаляя запись."""
+    ev = _make_event(db, user)
+    res = orchestrator.run(SETTINGS, db, user, "Отмени встречу «Синк по проекту»", now=NOW)
+    assert res.intent == "cancel_event"
+    assert res.status == "needs_confirmation"
+    assert db.get(CalendarEvent, ev.id).status == "planned"  # до подтверждения — без изменений
+
+    action_id = next(a.action_id for a in res.suggested_actions if a.type == "confirm")
+    out = orchestrator.confirm_action(db, SETTINGS, user, action_id)
+    assert out["ok"] is True
+    row = db.get(CalendarEvent, ev.id)
+    assert row is not None, "отмена не должна удалять запись"
+    assert row.status == "cancelled"
+
+
+def test_delete_event_removes_row(db, user):
+    """«Удали встречу» по-прежнему физически удаляет запись."""
+    ev = _make_event(db, user, title="Черновик встречи")
+    res = orchestrator.run(SETTINGS, db, user, "Удали встречу «Черновик встречи»", now=NOW)
+    assert res.intent == "delete_event"
+    action_id = next(a.action_id for a in res.suggested_actions if a.type == "confirm")
+    out = orchestrator.confirm_action(db, SETTINGS, user, action_id)
+    assert out["ok"] is True
+    assert db.get(CalendarEvent, ev.id) is None
+
+
+def test_delete_unknown_title_asks_clarification(db, user):
+    """BUG-04: несуществующее название → уточнение, а не «ближайшая попавшаяся»."""
+    ev = _make_event(db, user, title="Синк по проекту")
+    res = orchestrator.run(SETTINGS, db, user, "Удали встречу «Бюджет»", now=NOW)
+    assert res.status == "needs_clarification"
+    assert "Не нашёл" in res.reply
+    assert not [a for a in res.suggested_actions if a.type == "confirm"]
+    assert db.get(CalendarEvent, ev.id) is not None
+
+
+def test_move_event_by_date_still_resolves(db, user):
+    """Fallback по дате сохраняется: «перенеси встречу завтра» находит встречу."""
+    start = NOW.replace(hour=11) + timedelta(days=1)
+    ev = _make_event(db, user, title="Синк по проекту", start=start)
+    res = orchestrator.run(SETTINGS, db, user, "Перенеси встречу завтра на 15:00", now=NOW)
+    assert res.intent == "move_event"
+    assert res.status == "needs_confirmation"
+    assert any(c.data.get("id") == ev.id for c in res.cards if c.kind == "created_event")
 
 
 def test_needs_clarification_when_missing(db, user):

@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import Settings
 from app.models.assistant import (
+    ACTION_CANCEL_EVENT,
     ACTION_CONFIRMED,
     ACTION_CREATE_EVENT,
     ACTION_CREATE_EVENTS_FROM_PROTOCOL,
@@ -254,6 +255,7 @@ def _run_core(
         "create_events_from_protocol": _handle_create_from_protocol,
         "create_reminder": _handle_create_reminder,
         "delete_event": _handle_target_action,
+        "cancel_event": _handle_target_action,
         "update_event": _handle_target_action,
         "move_event": _handle_target_action,
     }
@@ -936,17 +938,41 @@ def _handle_create_reminder(settings, db, user, nr, result, now):
                                                     action_id=action.action_id))
 
 
+def _clarify_target_not_found(db, user, nr, result) -> None:
+    """Уточняющий ответ, когда целевая встреча не найдена (BUG-04)."""
+    result.status = "needs_clarification"
+    title_query = (nr.target_event.title or "").strip()
+    own_upcoming = [
+        e for e in calendar_service.upcoming_events(db, user.id, limit=6)
+        if e.owner_id == user.id
+    ][:3]
+    options = "; ".join(f"«{e.title}» {e.start_at:%d.%m %H:%M}" for e in own_upcoming)
+    if title_query:
+        result.reply = f"Не нашёл встречу с названием «{title_query}»."
+    else:
+        result.reply = "Не нашёл подходящую встречу."
+    if options:
+        result.reply += f" Ближайшие ваши встречи: {options}. Уточните название, дату или id (#123)."
+    else:
+        result.reply += " Уточните название, дату или id (#123)."
+
+
 def _handle_target_action(settings, db, user, nr, result, now):
     event = _resolve_target_event(db, user, nr, now)
     if event is None:
-        result.status = "needs_clarification"
-        result.reply = "Не нашёл подходящую встречу. Уточните название, дату или id (#123)."
+        _clarify_target_not_found(db, user, nr, result)
         return
 
     if nr.intent == "delete_event":
         payload = {"event_id": event.id}
         action = create_action(db, user, ACTION_DELETE_EVENT, f"Удаление «{event.title}»", payload)
         verb, label = "удалить", "Удалить встречу"
+        style = "danger"
+    elif nr.intent == "cancel_event":
+        # Отмена — смена статуса, не удаление (BUG-03): история и статистика сохраняются.
+        payload = {"event_id": event.id}
+        action = create_action(db, user, ACTION_CANCEL_EVENT, f"Отмена «{event.title}»", payload)
+        verb, label = "отменить", "Отменить встречу"
         style = "danger"
     elif nr.intent == "move_event":
         start, end = _compose_datetimes(nr, settings, now)
@@ -982,13 +1008,17 @@ def _resolve_target_event(db, user, nr, now) -> CalendarEvent | None:
         ev = calendar_service.get_event(db, te.event_id)
         if ev and (ev.owner_id == user.id or user.is_admin):
             return ev
+        # Явный id не найден / нет прав — не подставляем другую встречу.
+        return None
     # поиск по названию/дате среди событий пользователя
     stmt = select(CalendarEvent).where(
         CalendarEvent.owner_id == user.id,
         CalendarEvent.status != STATUS_CANCELLED,
     ).order_by(CalendarEvent.start_at.asc())
     events = list(db.execute(stmt).scalars().all())
-    title = (te.title or nr.event.title or "").strip().lower()
+    # Ключ поиска — только target_event.title: в event.title для move/update
+    # лежит НОВОЕ название или мусор разбора («Перенеси встречу»), не цель.
+    title = (te.title or "").strip().lower()
     date_hint = None
     if te.date_hint:
         try:
@@ -997,11 +1027,20 @@ def _resolve_target_event(db, user, nr, now) -> CalendarEvent | None:
             date_hint = None
     candidates = events
     if title:
-        candidates = [e for e in events if title in e.title.lower()] or candidates
+        candidates = [e for e in events if title in e.title.lower()]
+        if not candidates:
+            # BUG-04: название задано, совпадений нет — уточняем, а не берём «любую».
+            return None
     if date_hint:
         dc = [e for e in candidates if e.start_at.date() == date_hint]
         if dc:
             candidates = dc
+        elif not title:
+            # Дата — единственный ориентир, и на неё встреч нет.
+            return None
+    if not title and not date_hint and nr.intent in {"delete_event", "cancel_event"}:
+        # Разрушительные операции без ориентиров не выполняем «на ближайшей».
+        return None
     # ближайшее будущее
     future = [e for e in candidates if e.end_at >= now]
     pool = future or candidates
@@ -1144,6 +1183,22 @@ def confirm_action(db: Session, settings: Settings, user: User, action_id: str) 
             title = event.title
             calendar_service.delete_event(db, event)
             out["message"] = f"Встреча «{title}» удалена."
+
+        elif action.type == ACTION_CANCEL_EVENT:
+            event = calendar_service.get_event(db, payload["event_id"])
+            if event is None:
+                raise ValueError("Событие не найдено")
+            _ensure_event_mutable(event, user)
+            event = calendar_service.update_event(
+                db, event, EventUpdate(status=STATUS_CANCELLED), actor_id=user.id
+            )
+            out["updated_event"] = _event_out(event)
+            out["message"] = f"Встреча «{event.title}» отменена."
+            for p in event.participants:
+                if p.user_id != user.id and p.user is not None:
+                    notification_service.notify(db, settings, p.user,
+                        text=f"Встреча «{event.title}» {event.start_at:%d.%m %H:%M} отменена.",
+                        title="Встреча отменена", meta={"event_id": event.id})
 
         elif action.type == ACTION_CREATE_REMINDER:
             reminder = Reminder(event_id=payload["event_id"], user_id=user.id,

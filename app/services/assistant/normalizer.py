@@ -46,7 +46,10 @@ _INTENT_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("find_tickets", re.compile(r"билет|рейс|поезд|самол[её]т|авиа|ж/?д|перел[её]т|поездк|командировк|доехать|долететь|добраться", re.I)),
     ("find_free_slots", re.compile(r"свободн|занятост|занят\w*|когда\s+я\s+свобод|найди\s+(?:мне\s+)?врем|окно|слот|когда\s+удобн|подбери\s+врем", re.I)),
     ("move_event", re.compile(r"перенеси|перенести|сдвинь|сдвинуть|передвинь", re.I)),
-    ("delete_event", re.compile(r"удали|отмени|убери|отменить|удалить\s+встреч", re.I)),
+    # «Отменить» ≠ «удалить»: отмена меняет статус (история сохраняется),
+    # удаление стирает запись (BUG-03).
+    ("cancel_event", re.compile(r"отмени|отменить", re.I)),
+    ("delete_event", re.compile(r"удали|убери|удалить\s+встреч|стереть\s+встреч", re.I)),
     ("update_event", re.compile(r"измени|обнови|поменяй|редактир", re.I)),
     ("create_reminder", re.compile(r"напомн|напоминани|reminder", re.I)),
     ("summarize_schedule", re.compile(r"что\s+у\s+меня|расписани|обзор\s+дня|мой\s+день|итоги\s+недел|сводк", re.I)),
@@ -272,7 +275,7 @@ def compute_missing(nr: NormalizedRequest) -> list[str]:
         if tr.departure_date is None:
             missing.append("departure_date")
         # transport_type имеет дефолт "any" — не требуем.
-    elif nr.intent in {"delete_event", "update_event", "move_event"}:
+    elif nr.intent in {"delete_event", "cancel_event", "update_event", "move_event"}:
         te = nr.target_event
         if te.event_id is None and not (te.title or te.date_hint):
             missing.append("target_event")
@@ -362,7 +365,7 @@ def normalize_local(settings: Settings, message: str, now: datetime | None = Non
         if rem:
             ev.reminder = rem
 
-    if intent in {"delete_event", "update_event", "move_event", "create_reminder"}:
+    if intent in {"delete_event", "cancel_event", "update_event", "move_event", "create_reminder"}:
         nr.target_event = _guess_target_event(text, now)
         if intent == "move_event":
             nr.event.date = parse_date(text, now)
@@ -436,9 +439,17 @@ def _parse_reminder(text: str) -> ReminderData | None:
 
 def _guess_target_event(text: str, now: datetime) -> TargetEvent:
     te = TargetEvent()
-    m = re.search(r"(?:встреч\w*|событи\w*|созвон\w*)\s+[«\"]?([^»\"\n]{3,60})[»\"]?", text, re.I)
+    # Название в кавычках — берём как есть.
+    m = re.search(r"(?:встреч\w*|событи\w*|созвон\w*)\s+[«\"]([^»\"\n]{3,60})[»\"]", text, re.I)
     if m:
         te.title = m.group(1).strip().strip(".,")
+    else:
+        m = re.search(r"(?:встреч\w*|событи\w*|созвон\w*)\s+([^«»\"\n]{3,60})", text, re.I)
+        if m:
+            # «завтра на 15:00» — это дата/время, а не название: отрезаем хвост.
+            candidate = _TEMPORAL_CUT.sub("", " " + m.group(1)).strip(" .,")
+            if len(candidate) >= 3:
+                te.title = candidate
     d = parse_date(text, now)
     if d:
         te.date_hint = d.isoformat()
