@@ -547,6 +547,11 @@ def _merge_dify_result(settings: Settings, message: str, raw: dict, now: datetim
         nr = NormalizedRequest.model_validate(merged)
     except Exception:  # noqa: BLE001
         nr = base
+    # BUG-03: внешний нормализатор не знает интент cancel_event и возвращает
+    # delete_event для «отмени…». Не даём внешнему ответу превратить отмену
+    # (смена статуса) в физическое удаление.
+    if nr.intent == "delete_event" and base.intent == "cancel_event":
+        nr.intent = "cancel_event"
     nr.original_text = message
     nr.missing_fields = compute_missing(nr)
     nr.clarifying_question = build_clarifying_question(nr.missing_fields)

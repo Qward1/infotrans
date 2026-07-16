@@ -91,6 +91,18 @@ def test_normalizer_dify_enabled_falls_back_without_key():
     assert nr.source == "dify-fallback"  # именно fallback, а не падение
 
 
+def test_dify_delete_does_not_override_local_cancel():
+    """BUG-03: внешний нормализатор, не знающий cancel_event, не превращает
+    «отмени…» в физическое удаление."""
+    raw = {"intent": "delete_event", "confidence": 0.95}
+    nr = normalizer._merge_dify_result(SETTINGS, "Отмени встречу «Ревью кода»", raw, NOW)
+    assert nr.intent == "cancel_event"
+
+    # А настоящий delete от Dify для «удали…» сохраняется.
+    nr = normalizer._merge_dify_result(SETTINGS, "Удали встречу «Ревью кода»", raw, NOW)
+    assert nr.intent == "delete_event"
+
+
 def test_normalizer_missing_fields_create_event():
     nr = normalizer.normalize_local(SETTINGS, "запланируй встречу", now=NOW)
     assert nr.intent == "create_event"
