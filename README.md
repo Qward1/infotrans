@@ -141,14 +141,7 @@ app/
 config/
   config.example.yaml  # пример (в репозитории)
   config.yaml          # локальный конфиг с секретами (в .gitignore); *.bak — backup правок
-dify/
-  README.md            # как подключить и импортировать Dify-ассистентов
-  assistants/          # request_normalizer, smart_calendar_secretary, protocol_assistant,
-                       #   travel_assistant (+ исходный пример)
 tests/                 # config, auth, scheduling, orchestrator, assistant, smoke и др. (100+ тестов)
-assistant.yml          # исходный пример Dify-ассистента (эталон формата — не удалять)
-DEMO_SCRIPT.md         # пошаговый сценарий показа заказчику (5–10 минут)
-ARCHITECTURE.md        # архитектура: backend/frontend/db/assistant/Dify/алгоритмы/адаптеры
 ```
 
 ---
@@ -201,12 +194,10 @@ ARCHITECTURE.md        # архитектура: backend/frontend/db/assistant/D
 
 ## 🤖 Интеграция с Dify
 
-Каталог `dify/assistants/` содержит 4 импортируемых advanced-chat workflow:
-`request_normalizer`, `smart_calendar_secretary`, `protocol_assistant`, `travel_assistant`
-(+ `gospodderzhka-svo.example.yml` — исходный эталон формата).
-
-Как **импортировать**: Dify → Studio → Import DSL → загрузите нужный `*.yml`, выберите
-модель/провайдера, опубликуйте, получите `app-...` ключ. Пропишите в `config.yaml`:
+Бэкенд ожидает два опубликованных advanced-chat приложения Dify:
+`request_normalizer` (текст → структурированный запрос) и `smart_calendar_secretary`
+(финальная формулировка ответа). Создайте их в Dify → Studio, опубликуйте,
+получите `app-...` ключи и пропишите в `config.yaml`:
 
 ```yaml
 assistant:
@@ -223,7 +214,6 @@ assistant:
 
 `dify.enabled: false` → локальный нормализатор (без ключей). `true` → вызовы Dify с
 **мягким откатом** на локальный режим при любой ошибке (`source="dify-fallback"`).
-Подробности — в [`dify/README.md`](dify/README.md).
 
 ---
 
@@ -238,8 +228,6 @@ assistant:
 6. User загружает/выбирает документ → формируется протокол → создаются follow-up встречи.
 7. User ищет билеты (форма или чат) → карточки авиа/ЖД/автобус.
 8. Уведомления отображаются в топбаре и на `/notifications`.
-
-Полный пошаговый сценарий с фразами — в [`DEMO_SCRIPT.md`](DEMO_SCRIPT.md).
 
 ---
 
@@ -283,5 +271,4 @@ Europe/Moscow). «Сейчас» на сервере считается чере
 `passlib 1.7.4` импортирует стандартный модуль `crypt`, удалённый в Python 3.13
 (на 3.12 — DeprecationWarning). Проект приколот к Python 3.12; при апгрейде
 интерпретатора нужно либо перейти на совместимый форк (`libpass`), либо дождаться
-релиза passlib с поддержкой 3.13. Схему хэшей (`pbkdf2_sha256`) при этом НЕ менять —
-см. CLAUDE.md.
+релиза passlib с поддержкой 3.13. Схему хэшей (`pbkdf2_sha256`) при этом не менять.

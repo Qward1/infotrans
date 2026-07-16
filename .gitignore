@@ -33,3 +33,12 @@ uploads/
 .vscode/
 .idea/
 .DS_Store
+
+# Внутренние документы разработки и Dify-шаблоны — не входят в репозиторий
+CLAUDE.md
+ARCHITECTURE.md
+DEMO_SCRIPT.md
+PLAN.md
+assistant.yml
+dify/
+.claude/
