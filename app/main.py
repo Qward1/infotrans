@@ -108,6 +108,18 @@ async def _not_authorized(request: Request, exc: NotAuthorized):
     return render(request, "403.html", active="", status_code=403)
 
 
+@app.exception_handler(ValueError)
+async def _value_error(request: Request, exc: ValueError):
+    """ARCH-09: сервисы бросают ValueError с человекочитаемым текстом.
+
+    Для /api-путей — единый 400 JSON (без дублей try/except по роутерам);
+    для страниц не перехватываем (обычный 500, чтобы не маскировать баги).
+    """
+    if request.url.path.startswith("/api"):
+        return JSONResponse(status_code=400, content={"detail": str(exc)})
+    raise exc
+
+
 # Роутеры (порядок не важен, кроме перекрытий путей).
 app.include_router(auth.router)
 app.include_router(dashboard.router)

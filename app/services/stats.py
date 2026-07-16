@@ -5,6 +5,8 @@
 """
 from __future__ import annotations
 
+from app.core.clock import local_now
+
 from datetime import datetime, timedelta
 
 from sqlalchemy import case, func, select
@@ -37,7 +39,7 @@ def _duration_minutes_expr():
 
 def system_overview(db: Session) -> dict:
     """Ключевые счётчики по системе (включая среднюю длительность и переносы)."""
-    now = datetime.now()
+    now = local_now()
     total_users = db.execute(select(func.count()).select_from(User)).scalar_one()
     active_users = db.execute(
         select(func.count()).select_from(User).where(User.is_active.is_(True))
@@ -77,7 +79,7 @@ def conflicts_count(db: Session) -> int:
     Статистика намеренно считается по владельцам (см. BUG-32): конфликт пары
     встреч учитывается один раз, а не для каждого приглашённого.
     """
-    now = datetime.now()
+    now = local_now()
     start, end = now - timedelta(days=30), now + timedelta(days=30)
     stmt = select(CalendarEvent).where(
         CalendarEvent.status != STATUS_CANCELLED,
@@ -102,7 +104,7 @@ def conflicts_count(db: Session) -> int:
 
 def weekly_load(db: Session, reference: datetime | None = None) -> dict:
     """Нагрузка по встречам за текущую неделю: часы и количество на сотрудника."""
-    reference = reference or datetime.now()
+    reference = reference or local_now()
     week_start, week_end = calendar_service.week_bounds(reference)
     minutes = _duration_minutes_expr()
     stmt = (

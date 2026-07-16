@@ -16,6 +16,7 @@ from urllib.parse import quote, urlencode, urljoin
 import httpx
 
 from app.core.config import Settings
+from app.core.clock import local_now
 from app.schemas.assistant import TicketOption
 from app.services import location_service
 
@@ -235,7 +236,7 @@ class MockTravelProvider(TravelProvider):
         for mode in _mode_for_transport(params.transport_type):
             options += self._options_for_mode(mode, params, settings)
         # BUG-08: на «сегодня» не показываем рейсы, которые уже ушли.
-        now = datetime.now()
+        now = local_now()
         return [o for o in options if o.depart_at >= now]
 
 
@@ -622,7 +623,7 @@ def build_params(
         raise TicketValidationError("Город отправления и прибытия не должны совпадать")
     if depart_date is None:
         raise TicketValidationError("Укажите дату отправления")
-    if depart_date.date() < datetime.now().date():
+    if depart_date.date() < local_now().date():
         raise TicketValidationError("Дата отправления не может быть в прошлом")
     if return_date and return_date.date() < depart_date.date():
         raise TicketValidationError("Дата возвращения не может быть раньше даты отправления")

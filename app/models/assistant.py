@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -140,6 +140,8 @@ NOTIFY_READ = "read"
 
 class Notification(Base):
     __tablename__ = "notifications"
+    # ARCH-07: индекс под «непрочитанные пользователя».
+    __table_args__ = (Index("ix_notifications_user_status", "user_id", "status"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(

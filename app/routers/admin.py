@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.permissions import require_admin
+from app.core.clock import local_now
 from app.models.user import ROLES, User
 from app.services import audit as audit_service
 from app.services import stats as stats_service
@@ -47,7 +48,7 @@ def admin_stats(
     user: User = Depends(require_admin),
 ):
     # FN-09: навигация по неделям недельной статистики.
-    reference = datetime.now()
+    reference = local_now()
     if week:
         try:
             reference = datetime.strptime(week, "%Y-%m-%d")

@@ -8,6 +8,7 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
+from app.core.clock import local_now
 from app.models.assistant import (
     ACTION_CANCEL_EVENT,
     ACTION_CONFIRMED,
@@ -65,7 +66,7 @@ def reject_action(db: Session, user: User, action_id: str) -> dict:
 
 def expire_stale_actions(db: Session, now: datetime | None = None) -> int:
     """Пометить протухшие pending-черновики как expired (BUG-22, один UPDATE)."""
-    now = now or datetime.now()
+    now = now or local_now()
     result = db.execute(
         update(AssistantAction)
         .where(
@@ -128,7 +129,7 @@ def confirm_action(db: Session, settings: Settings, user: User, action_id: str) 
         return {"ok": False, "detail": f"Действие уже {action.status}"}
 
     # BUG-05: просроченный черновик не исполняем (подтверждение из старой вкладки).
-    now = datetime.now()
+    now = local_now()
     if action.expires_at and action.expires_at < now:
         action.status = ACTION_EXPIRED
         db.commit()

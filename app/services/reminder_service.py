@@ -14,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import Settings
+from app.core.clock import local_now
 from app.models.reminder import REMINDER_CANCELLED, REMINDER_SCHEDULED, REMINDER_SENT, Reminder
 from app.services.assistant import notification_service
 
@@ -22,7 +23,7 @@ logger = logging.getLogger("smartcal.reminders")
 
 def send_due_reminders(db: Session, settings: Settings, now: datetime | None = None) -> int:
     """Отправить все наступившие напоминания. Возвращает число отправленных."""
-    now = now or datetime.now()
+    now = now or local_now()
     due = db.execute(
         select(Reminder)
         .options(selectinload(Reminder.event), selectinload(Reminder.user))

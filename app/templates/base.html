@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="{{ base }}/static/css/app.css" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%97%93%EF%B8%8F%3C/text%3E%3C/svg%3E" />
   <script>
-    // Базовый префикс пути (reverse-proxy) — используется fetch-запросами в app.js.
+    // Базовый префикс пути (reverse-proxy) — используется fetch-запросами в core.js.
     window.APP_BASE = "{{ base }}";
     // Текущий пользователь — для прав в UI (например, «только просмотр» чужих встреч).
     window.APP_USER = {% if current_user %}{{ {"id": current_user.id, "is_admin": current_user.is_admin} | tojson }}{% else %}null{% endif %};
@@ -105,7 +105,13 @@
   </div>
 
   <div class="toast-wrap" role="status" aria-live="polite"></div>
-  <script src="{{ base }}/static/js/app.js" defer></script>
+  {# ARCH-05: core.js первым — общий слой; страничные модули включаются по якорному DOM. #}
+  <script src="{{ base }}/static/js/core.js" defer></script>
+  <script src="{{ base }}/static/js/calendar.js" defer></script>
+  <script src="{{ base }}/static/js/chat.js" defer></script>
+  <script src="{{ base }}/static/js/documents.js" defer></script>
+  <script src="{{ base }}/static/js/travel.js" defer></script>
+  <script src="{{ base }}/static/js/admin.js" defer></script>
   {% block extra_js %}{% endblock %}
 </body>
 </html>

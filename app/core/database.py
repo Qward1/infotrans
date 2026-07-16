@@ -68,7 +68,7 @@ def init_db() -> None:
 
 
 def _run_lightweight_migrations() -> None:
-    """Минимальные ALTER TABLE для существующих MVP-БД без Alembic."""
+    """Минимальные ALTER TABLE / CREATE INDEX для существующих MVP-БД без Alembic."""
     with engine.begin() as conn:
         inspector = inspect(conn)
         table_names = set(inspector.get_table_names())
@@ -93,3 +93,19 @@ def _run_lightweight_migrations() -> None:
                 "WHERE updated_by_id IS NULL"
             )
         )
+        # ARCH-07: индексы под реальные запросы (create_all не добавляет их к
+        # существующим таблицам; для новых БД продублированы в __table_args__).
+        conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_events_owner_start "
+            "ON calendar_events (owner_id, start_at)"
+        ))
+        if "notifications" in table_names:
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_notifications_user_status "
+                "ON notifications (user_id, status)"
+            ))
+        if "event_participants" in table_names:
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_participants_user "
+                "ON event_participants (user_id, event_id)"
+            ))

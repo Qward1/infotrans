@@ -1,6 +1,8 @@
 """Сервис событий календаря: CRUD и выборки по диапазону/дню/неделе/месяцу."""
 from __future__ import annotations
 
+from app.core.clock import local_now
+
 from datetime import date, datetime, timedelta
 
 from sqlalchemy import and_, or_, select
@@ -81,7 +83,7 @@ def update_event(
         _set_participants(db, event, participants)
     if actor_id is not None:
         event.updated_by_id = actor_id
-    event.updated_at = datetime.now()
+    event.updated_at = local_now()
     db.commit()
     db.refresh(event)
     return event
@@ -161,7 +163,7 @@ def list_events_for_user(
 def week_bounds(reference: datetime | date | None = None) -> tuple[datetime, datetime]:
     """Границы недели (Пн 00:00 — следующий Пн 00:00), содержащей reference."""
     if reference is None:
-        reference = datetime.now()
+        reference = local_now()
     if isinstance(reference, datetime):
         ref_date = reference.date()
     else:
@@ -174,7 +176,7 @@ def week_bounds(reference: datetime | date | None = None) -> tuple[datetime, dat
 def day_bounds(reference: datetime | date | None = None) -> tuple[datetime, datetime]:
     """Границы дня (00:00 — следующий день 00:00), содержащего reference."""
     if reference is None:
-        reference = datetime.now()
+        reference = local_now()
     ref_date = reference.date() if isinstance(reference, datetime) else reference
     start = datetime(ref_date.year, ref_date.month, ref_date.day)
     return start, start + timedelta(days=1)
@@ -183,7 +185,7 @@ def day_bounds(reference: datetime | date | None = None) -> tuple[datetime, date
 def month_bounds(reference: datetime | date | None = None) -> tuple[datetime, datetime]:
     """Границы месяца (1-е число 00:00 — 1-е число следующего месяца 00:00)."""
     if reference is None:
-        reference = datetime.now()
+        reference = local_now()
     ref_date = reference.date() if isinstance(reference, datetime) else reference
     start = datetime(ref_date.year, ref_date.month, 1)
     if ref_date.month == 12:
@@ -248,7 +250,7 @@ def list_week(
 
 def upcoming_events(db: Session, user_id: int, limit: int = 5) -> list[CalendarEvent]:
     """Ближайшие не-отменённые события пользователя (владелец или участник)."""
-    now = datetime.now()
+    now = local_now()
     stmt = (
         select(CalendarEvent)
         .where(

@@ -127,10 +127,10 @@ class TicketProviderConfig(BaseModel):
 
 class TicketsConfig(BaseModel):
     mode: str = "sites"  # sites | provider | mock
-    avg_speed_kmh: float = 65.0
+    # Средняя «дверь-в-дверь» скорость междугородних поездок (км/ч) — питает
+    # оценку времени в пути в location_service (ARCH-06).
+    avg_speed_kmh: float = 90.0
     currency: str = "RUB"
-    # Если очная поездка «туда-обратно за день» дольше — считаем нереалистичной.
-    same_day_return_max_hours: float = 10.0
     provider: TicketProviderConfig = Field(default_factory=TicketProviderConfig)
 
 

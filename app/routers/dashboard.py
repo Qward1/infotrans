@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.permissions import get_current_user_optional, require_user
 from app.core.urls import local_redirect
+from app.core.clock import local_now
 from app.models.user import User
 from app.services import calendar as calendar_service
 from app.services import scheduling as scheduling_service
@@ -34,7 +35,7 @@ def dashboard(
     db: Session = Depends(get_db),
     user: User = Depends(require_user),
 ):
-    now = datetime.now()
+    now = local_now()
     week_start, week_end, week_events = calendar_service.list_week(db, user.id, now)
     upcoming = calendar_service.upcoming_events(db, user.id, limit=6)
 

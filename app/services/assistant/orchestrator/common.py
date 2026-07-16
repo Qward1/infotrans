@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
+from app.core.clock import local_now
 from app.models.assistant import ACTION_PENDING, AssistantAction
 from app.models.calendar import CalendarEvent
 from app.models.user import User
@@ -60,7 +61,7 @@ def create_action(
         status=ACTION_PENDING,
         title=title[:255],
         payload_json=json.dumps(payload, ensure_ascii=False, default=str),
-        expires_at=datetime.now() + timedelta(minutes=ttl_minutes),
+        expires_at=local_now() + timedelta(minutes=ttl_minutes),
     )
     db.add(action)
     db.commit()

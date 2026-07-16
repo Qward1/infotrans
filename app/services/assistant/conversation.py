@@ -12,6 +12,8 @@
 """
 from __future__ import annotations
 
+from app.core.clock import local_now
+
 import json
 import logging
 from dataclasses import dataclass, field
@@ -104,7 +106,7 @@ def continue_request(
     now: datetime | None = None,
 ) -> NormalizedRequest:
     """Собрать запрос-продолжение: прошлые данные + разбор нового сообщения."""
-    now = now or datetime.now()
+    now = now or local_now()
     base = {**(prior.extracted or {})}
     base["intent"] = prior.intent
     try:

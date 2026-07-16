@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.permissions import require_admin, require_user
+from app.core.clock import local_now
 from app.models.user import User
 from app.routers.calendar import calendar_payload, resolve_calendar_owner
 from app.schemas.assistant import (
@@ -128,13 +129,10 @@ def api_update_assistant_chat(
         raise HTTPException(status_code=404, detail="Чат не найден")
     if chat.user_id != user.id:
         raise HTTPException(status_code=403, detail="Нельзя изменять чужой чат")
-    try:
-        if payload.title is not None:
-            chat = chat_history.rename_chat(db, chat, payload.title)
-        if payload.is_archived is not None:
-            chat = chat_history.set_archived(db, chat, payload.is_archived)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+    if payload.title is not None:
+        chat = chat_history.rename_chat(db, chat, payload.title)
+    if payload.is_archived is not None:
+        chat = chat_history.set_archived(db, chat, payload.is_archived)
     return chat_history.serialize_chat(chat, include_messages=True, viewer=user)
 
 
@@ -167,10 +165,7 @@ def api_add_assistant_chat_message(
         raise HTTPException(status_code=403, detail="Нельзя писать в чужой чат")
     if payload.role in {"system", "tool"} and not user.is_admin:
         raise HTTPException(status_code=403, detail="Недопустимая роль сообщения")
-    try:
-        message = chat_history.add_message(db, chat, payload.role, payload.content, payload.payload)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+    message = chat_history.add_message(db, chat, payload.role, payload.content, payload.payload)
     return chat_history.serialize_message(message, viewer=user)
 
 
@@ -309,14 +304,15 @@ def api_document_protocol(
 # --------------------------------------------------------------------------- #
 # Календарь / события                                                         #
 # --------------------------------------------------------------------------- #
-@router.get("/calendar/week", response_model=list[EventOut])
+@router.get("/calendar/week", response_model=list[EventOut], deprecated=True)
 def api_calendar_week(
     week: str | None = Query(default=None, description="Дата недели YYYY-MM-DD"),
     user_id: int | None = Query(default=None, description="Для admin: календарь пользователя"),
     db: Session = Depends(get_db),
     user: User = Depends(require_user),
 ):
-    ref = datetime.now()
+    """Deprecated: легаси-дубль /api/calendar/range (оставлен для совместимости)."""
+    ref = local_now()
     if week:
         try:
             ref = datetime.strptime(week, "%Y-%m-%d")
@@ -335,7 +331,7 @@ def api_calendar_range(
     db: Session = Depends(get_db),
     user: User = Depends(require_user),
 ):
-    ref = datetime.now()
+    ref = local_now()
     if date:
         try:
             ref = datetime.strptime(date, "%Y-%m-%d")
@@ -361,10 +357,7 @@ def api_create_event(
     user: User = Depends(require_user),
 ):
     owner = resolve_calendar_owner(db, user, payload.owner_id)
-    try:
-        event = calendar_service.create_event(db, owner.id, payload, actor_id=user.id)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+    event = calendar_service.create_event(db, owner.id, payload, actor_id=user.id)
     # BUG-13: приглашения участникам (и владельцу, если создал админ) — как у ассистента.
     event_notifications.notify_created(db, get_settings(), event, user)
     audit_service.record(
@@ -383,10 +376,7 @@ def api_update_event(
 ):
     event = _get_owned_event(db, user, event_id)
     old_times = (event.start_at, event.end_at)
-    try:
-        event = calendar_service.update_event(db, event, payload, actor_id=user.id)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+    event = calendar_service.update_event(db, event, payload, actor_id=user.id)
     # BUG-13: при переносе времени уведомляем участников и владельца.
     if (event.start_at, event.end_at) != old_times:
         event_notifications.notify_moved(db, get_settings(), event, user)
@@ -433,7 +423,7 @@ def api_free_slots(
     user: User = Depends(require_user),
 ):
     owner = resolve_calendar_owner(db, user, user_id)
-    start = datetime.now()
+    start = local_now()
     end = start + timedelta(days=days)
     slots = scheduling_service.free_slots_for_user(db, owner.id, start, end, duration)
     return [
@@ -484,8 +474,6 @@ def api_assistant_employee_availability(
         )
     except calendar_context.CalendarAccessDenied:
         raise HTTPException(status_code=403, detail="Нет доступа к календарю пользователя")
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
 
 
 # --------------------------------------------------------------------------- #
@@ -580,10 +568,7 @@ def api_create_user(
     db: Session = Depends(get_db),
     admin: User = Depends(require_admin),
 ):
-    try:
-        created = users_service.create_user(db, payload)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+    created = users_service.create_user(db, payload)
     audit_service.record(
         db, actor_user_id=admin.id, action="create_user", entity_type="user", entity_id=created.id,
         payload={"email": created.email, "role": created.role},
@@ -610,10 +595,7 @@ def api_update_user(
             status_code=400,
             detail="Это единственный активный администратор — нельзя снять роль или отключить его.",
         )
-    try:
-        updated = users_service.update_user(db, target, payload)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+    updated = users_service.update_user(db, target, payload)
     audit_service.record(
         db, actor_user_id=admin.id, action="update_user", entity_type="user", entity_id=updated.id,
         payload={"role": updated.role, "is_active": updated.is_active},

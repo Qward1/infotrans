@@ -15,6 +15,7 @@ import re
 from datetime import date, datetime, time, timedelta
 
 from app.core.config import Settings
+from app.core.clock import local_now
 from app.services.assistant import dify_client
 from app.services.assistant.schemas import (
     EventData,
@@ -329,7 +330,7 @@ def build_clarifying_question(missing: list[str]) -> str | None:
 # Локальный нормализатор                                                       #
 # --------------------------------------------------------------------------- #
 def normalize_local(settings: Settings, message: str, now: datetime | None = None) -> NormalizedRequest:
-    now = now or datetime.now()
+    now = now or local_now()
     text = message.strip()
     intent = detect_intent(text)
     lang = detect_language(text)

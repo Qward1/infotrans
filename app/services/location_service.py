@@ -26,9 +26,14 @@ _APPROX_DISTANCE_KM: dict[tuple[str, str], float] = {
     ("екатеринбург", "казань"): 730,
 }
 
-# Средняя «дверь-в-дверь» скорость для оценки времени в пути внутри страны (км/ч),
-# включая дорогу до вокзала/аэропорта и обратно.
-_INTERCITY_EFFECTIVE_KMH = 90.0
+# Средняя «дверь-в-дверь» скорость берётся из tickets.avg_speed_kmh (ARCH-06);
+# fallback на 90 км/ч, если в конфиге ноль/мусор.
+_DEFAULT_INTERCITY_KMH = 90.0
+
+
+def _effective_speed_kmh(settings: Settings) -> float:
+    speed = getattr(settings.tickets, "avg_speed_kmh", 0) or 0
+    return float(speed) if speed > 0 else _DEFAULT_INTERCITY_KMH
 
 
 def normalize_city(city: str | None) -> str:
@@ -55,7 +60,7 @@ def intercity_travel_minutes(origin: str | None, destination: str | None, settin
     dist = city_distance_km(origin, destination)
     if dist <= 0:
         return 0
-    return int(round(dist / _INTERCITY_EFFECTIVE_KMH * 60))
+    return int(round(dist / _effective_speed_kmh(settings) * 60))
 
 
 @dataclass(frozen=True)

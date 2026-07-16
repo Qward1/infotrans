@@ -93,9 +93,8 @@ scheduling:
 tickets:
   mode: "sites"           # sites | provider | mock
   # Средняя скорость (км/ч) для оценки времени в дороге, если провайдер не отдаёт длительность.
-  avg_speed_kmh: 65
+  avg_speed_kmh: 90   # средняя скорость поездок для оценки дороги (км/ч)
   currency: "RUB"
-  same_day_return_max_hours: 10
   provider:
     # travelpayouts/aviasales — адаптер Aviasales Data API для авиабилетов.
     # generic/http — ваш нормализованный HTTP endpoint для авиа/ЖД/автобусов.
@@ -111,6 +110,8 @@ notifications:
   mode: "mock"            # mock | provider
   default_channel: "messenger"
   channels: ["web", "messenger", "email"]   # включённые каналы (для отображения)
+  # FN-08: фоновая отправка наступивших напоминаний (задача в lifespan, раз в 60с).
+  reminders_enabled: true
   messenger:
     enabled: false
     provider: "mock"      # mock | max | telegram | email

@@ -7,6 +7,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
+from app.core.clock import local_now
 from app.models.user import User
 from app.services.assistant import conversation, normalizer
 from app.services.assistant.orchestrator import handlers_events, handlers_protocol, handlers_slots, handlers_travel
@@ -37,7 +38,7 @@ def run(
     финальный текст ответа «озвучивает» ассистент ``smart_calendar_secretary`` —
     поверх фактов бэкенда, с мягким откатом на детерминированный текст при сбое.
     """
-    now = now or datetime.now()
+    now = now or local_now()
     conversation_id = conversation_id or str(uuid.uuid4())
     result = _run_core(settings, db, user, message, conversation_id, now)
     _apply_secretary_voice(settings, user, message, result, conversation_id)

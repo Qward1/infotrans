@@ -1,6 +1,8 @@
 """Хендлеры протоколов: генерация из документа, follow-up встречи."""
 from __future__ import annotations
 
+from app.core.clock import local_now
+
 import uuid
 from datetime import datetime, timedelta
 
@@ -89,7 +91,7 @@ def _emit_protocol(settings, db, user, protocol: ProtocolData, result: Assistant
 
 
 def _followups_to_events(settings, protocol: ProtocolData) -> list[dict]:
-    now = datetime.now()
+    now = local_now()
     events = []
     for i, fu in enumerate(protocol.follow_up_meetings, start=1):
         # Грубая дата: через 7*i дней в 10:00, если нет распознанного намёка.

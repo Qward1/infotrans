@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings, get_settings
 from app.core.database import SessionLocal, init_db
 from app.core.security import hash_password
+from app.core.clock import local_now
 from app.models.assistant import Document, Notification
 from app.models.audit import AuditLog
 from app.models.calendar import (
@@ -274,7 +275,7 @@ def _seed_demo(db: Session, settings: Settings) -> None:
     if admin is None:
         return
 
-    now = datetime.now().replace(second=0, microsecond=0)
+    now = local_now().replace(second=0, microsecond=0)
     tz = settings.app.timezone
 
     users = _ensure_demo_users(db)

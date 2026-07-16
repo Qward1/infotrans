@@ -1,6 +1,8 @@
 """История чатов ассистента с проверкой владельца."""
 from __future__ import annotations
 
+from app.core.clock import local_now
+
 import json
 import uuid
 from datetime import datetime
@@ -110,7 +112,7 @@ def add_message(
         content=content or "",
         payload_json=json.dumps(payload or {}, ensure_ascii=False) if payload else "",
     )
-    chat.updated_at = datetime.now()
+    chat.updated_at = local_now()
     if chat.title == DEFAULT_TITLE and role == "user":
         chat.title = title_from_message(content)
     db.add(msg)
@@ -126,7 +128,7 @@ def rename_chat(db: Session, chat: AssistantChat, title: str) -> AssistantChat:
     if not cleaned:
         raise ValueError("Название чата не может быть пустым")
     chat.title = cleaned[:255]
-    chat.updated_at = datetime.now()
+    chat.updated_at = local_now()
     db.add(chat)
     db.commit()
     db.refresh(chat)
@@ -135,7 +137,7 @@ def rename_chat(db: Session, chat: AssistantChat, title: str) -> AssistantChat:
 
 def set_archived(db: Session, chat: AssistantChat, archived: bool = True) -> AssistantChat:
     chat.is_archived = archived
-    chat.updated_at = datetime.now()
+    chat.updated_at = local_now()
     db.add(chat)
     db.commit()
     db.refresh(chat)

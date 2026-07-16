@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
+from app.core.clock import local_now
 from app.models.calendar import CalendarEvent
 from app.models.user import User
 from app.services import availability, scheduling
@@ -209,7 +210,7 @@ def infer_date_range(text: str, settings: Settings, now: datetime | None = None)
     """Определить диапазон для запросов ассистента о расписании."""
     from app.services.assistant import normalizer
 
-    now = now or datetime.now()
+    now = now or local_now()
     lower = _norm(text)
     today = _today_in_timezone(settings.app.timezone, now)
     parsed = normalizer.parse_date(text, now)

@@ -223,11 +223,13 @@ def test_adaptive_chat_ui_hooks_render(client):
     assert 'id="chat-history-panel"' in html
     assert 'id="chat-side-toggle"' in html
 
-    js = client.get("/static/js/app.js").text
+    # ARCH-05: app.js разбит на модули — core.js (общий слой) и chat.js.
+    core_js = client.get("/static/js/core.js").text
+    chat_js = client.get("/static/js/chat.js").text
     css = client.get("/static/css/app.css").text
-    assert "smartcal-sidebar-collapsed" in js
-    assert "smartcal-chat-history-collapsed" in js
-    assert "smartcal-chat-side-collapsed" in js
+    assert "smartcal-sidebar-collapsed" in core_js
+    assert "smartcal-chat-history-collapsed" in chat_js
+    assert "smartcal-chat-side-collapsed" in chat_js
     assert ".chat-shell.chat-side-collapsed" in css
 
 

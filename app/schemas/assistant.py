@@ -29,28 +29,6 @@ class AssistantChatMessageCreate(BaseModel):
     payload: dict = Field(default_factory=dict)
 
 
-class ChatAction(BaseModel):
-    """Структурированное действие, которое ассистент предлагает выполнить."""
-
-    type: str  # create_event | find_slots | search_tickets | make_protocol | info
-    label: str
-    payload: dict = Field(default_factory=dict)
-
-
-class ChatResponse(BaseModel):
-    reply: str
-    intent: str = "smalltalk"
-    mode: str = "mock"  # mock | dify | llm
-    conversation_id: str | None = None
-    actions: list[ChatAction] = Field(default_factory=list)
-
-
-class FreeSlot(BaseModel):
-    start_at: datetime
-    end_at: datetime
-    score: float = 1.0
-
-
 class TicketOption(BaseModel):
     provider: str
     carrier: str = ""
