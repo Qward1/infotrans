@@ -269,6 +269,25 @@ def api_documents(
     }
 
 
+@router.delete("/documents/{document_id}", status_code=204)
+def api_delete_document(
+    document_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_user),
+):
+    """Удалить документ (FN-12): владелец или админ."""
+    document = document_reader.get(db, document_id)
+    if document is None or (document.owner_id != user.id and not user.is_admin):
+        raise HTTPException(status_code=404, detail="Документ не найден")
+    filename = document.filename
+    document_reader.delete(db, document)
+    audit_service.record(
+        db, actor_user_id=user.id, action="delete_document", entity_type="document",
+        entity_id=document_id, payload={"filename": filename},
+    )
+    return None
+
+
 @router.post("/documents/{document_id}/protocol")
 def api_document_protocol(
     document_id: int,
@@ -481,6 +500,8 @@ def api_tickets_search(
     transport: str = Query(default="any", description="any | flight | train | bus"),
     passengers: int = Query(default=1, ge=1, le=9),
     sort: str = Query(default="price", description="price | departure | duration"),
+    budget: float | None = Query(default=None, ge=0, description="Максимальная цена"),
+    direct: bool = Query(default=False, description="Только без пересадок"),
     user: User = Depends(require_user),
 ):
     settings = get_settings()
@@ -527,6 +548,11 @@ def api_tickets_search(
         raise HTTPException(status_code=503, detail=str(exc))
     except TicketProviderError as exc:
         raise HTTPException(status_code=502, detail=str(exc))
+    # BUG-26: бюджет и «без пересадок» применяются на сервере, а не декоративно в UI.
+    if direct:
+        options = [o for o in options if o.transfers == 0]
+    if budget is not None and budget > 0:
+        options = [o for o in options if o.price <= budget]
     return {
         "items": [o.model_dump() for o in options],
         "external_searches": external_searches,

@@ -1279,6 +1279,9 @@ textarea:focus-visible {
   border: 0;
 }
 
+/* BUG-25: отменённая встреча в карточках ассистента */
+.a-slot.cancelled { opacity: 0.55; text-decoration: line-through; }
+
 /* UX-15: тосты — доступность и кнопка закрытия */
 .toast { display: flex; align-items: center; gap: 10px; }
 .toast .toast-close {

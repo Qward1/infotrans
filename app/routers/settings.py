@@ -7,6 +7,7 @@ YAML сохраняется валидным, кэш настроек сбрас
 """
 from __future__ import annotations
 
+import re
 import shutil
 
 import yaml
@@ -47,6 +48,8 @@ def _safe_view(settings) -> dict:
             "default_meeting_minutes": sc.default_meeting_minutes,
             "default_travel_buffer_minutes": sc.default_travel_buffer_minutes,
             "high_priority_threshold": sc.high_priority_threshold,
+            "max_alternatives": sc.max_alternatives,
+            "slot_granularity_minutes": sc.slot_granularity_minutes,
         },
         "assistant": {
             "dify_enabled": settings.assistant.dify.enabled,
@@ -111,6 +114,10 @@ def _save_config(updates: list[tuple[list[str], object]]) -> None:
     get_settings.cache_clear()
 
 
+# BUG-21: рабочие часы валидируются, а не «молча падают на дефолт».
+_TIME_RE = re.compile(r"^([01]?\d|2[0-3]):[0-5]\d$")
+
+
 @router.post("/settings")
 def settings_save(
     request: Request,
@@ -120,19 +127,57 @@ def settings_save(
     wh_end: str = Form(...),
     default_meeting_minutes: int = Form(...),
     default_travel_buffer_minutes: int = Form(...),
+    high_priority_threshold: int = Form(...),
+    max_alternatives: int = Form(...),
     default_channel: str = Form(...),
     dify_enabled: str = Form(default="off"),
     dify_base_url: str = Form(default=""),
     admin: User = Depends(require_admin),
 ):
     """Безопасное сохранение whitelisted-полей (только admin). Секреты не трогаем."""
+    wh_start = wh_start.strip()
+    wh_end = wh_end.strip()
+    errors: list[str] = []
+    if not _TIME_RE.match(wh_start):
+        errors.append("Начало рабочего дня должно быть в формате ЧЧ:ММ.")
+    if not _TIME_RE.match(wh_end):
+        errors.append("Конец рабочего дня должен быть в формате ЧЧ:ММ.")
+    if not errors and wh_start >= wh_end:
+        errors.append("Начало рабочего дня должно быть раньше конца.")
+    if errors:
+        # Показываем ошибку и введённые значения (не redirect и не тихий дефолт).
+        settings = get_settings()
+        safe = _safe_view(settings)
+        safe["app"]["name"] = app_name.strip()
+        safe["app"]["timezone"] = timezone.strip()
+        safe["scheduling"]["wh_start"] = wh_start
+        safe["scheduling"]["wh_end"] = wh_end
+        safe["scheduling"]["default_meeting_minutes"] = default_meeting_minutes
+        safe["scheduling"]["default_travel_buffer_minutes"] = default_travel_buffer_minutes
+        safe["scheduling"]["high_priority_threshold"] = high_priority_threshold
+        safe["scheduling"]["max_alternatives"] = max_alternatives
+        return render(
+            request,
+            "settings.html",
+            current_user=admin,
+            active="settings",
+            safe=safe,
+            config_path=str(CONFIG_PATH),
+            is_admin=True,
+            saved=False,
+            error=" ".join(errors),
+            status_code=400,
+        )
     updates: list[tuple[list[str], object]] = [
         (["app", "name"], app_name.strip() or "Умный календарь"),
         (["app", "timezone"], timezone.strip() or "Europe/Moscow"),
-        (["scheduling", "working_hours", "start"], wh_start.strip() or "09:00"),
-        (["scheduling", "working_hours", "end"], wh_end.strip() or "19:00"),
+        (["scheduling", "working_hours", "start"], wh_start),
+        (["scheduling", "working_hours", "end"], wh_end),
         (["scheduling", "default_meeting_minutes"], max(15, min(600, default_meeting_minutes))),
         (["scheduling", "default_travel_buffer_minutes"], max(0, min(600, default_travel_buffer_minutes))),
+        # FN-10: реальные параметры планировщика доступны для правки.
+        (["scheduling", "high_priority_threshold"], max(0, min(10, high_priority_threshold))),
+        (["scheduling", "max_alternatives"], max(1, min(10, max_alternatives))),
         (["notifications", "default_channel"], default_channel.strip() or "messenger"),
         (["assistant", "dify", "enabled"], dify_enabled == "on"),
         (["assistant", "dify", "base_url"], dify_base_url.strip() or "https://api.dify.ai/v1"),

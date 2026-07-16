@@ -33,7 +33,12 @@
   <section class="panel glass">
     <div class="panel-head">
       <h2>Время на встречах за неделю</h2>
-      <span class="muted">{{ weekly.week_start.strftime('%d.%m') }}–{{ weekly.week_end.strftime('%d.%m') }}</span>
+      {# FN-09: навигация по неделям #}
+      <span class="flex items-center gap-8">
+        <a class="btn small ghost" href="{{ base }}/admin/stats?week={{ week_prev }}" aria-label="Предыдущая неделя">‹</a>
+        <span class="muted nowrap">{{ weekly.week_start.strftime('%d.%m') }}–{{ weekly.week_end.strftime('%d.%m') }}</span>
+        <a class="btn small ghost" href="{{ base }}/admin/stats?week={{ week_next }}" aria-label="Следующая неделя">›</a>
+      </span>
     </div>
     {% set max_min = (weekly.rows | map(attribute='minutes') | max) if weekly.rows else 0 %}
     {% for r in weekly.rows %}

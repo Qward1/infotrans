@@ -504,6 +504,21 @@ def _handle_create_event(settings, db, user, nr, result, now):
     online_suggested = False
     if payload["location_type"] == "offline" and resolve.buffer_warnings:
         online_suggested = True
+    # FN-13: успеет ли пользователь доехать из города последней очной встречи дня.
+    if payload["location_type"] == "offline" and payload["city"]:
+        origin_city = _last_offline_city_before(db, user.id, start)
+        if origin_city and not location_service.is_offline_realistic(
+            origin_city, payload["city"], settings
+        ):
+            travel_min = location_service.intercity_travel_minutes(
+                origin_city, payload["city"], settings
+            )
+            hours = max(1, round(travel_min / 60))
+            result.warnings.append(
+                f"Дорога из {origin_city} в {payload['city']} займёт ~{hours}ч — "
+                "очная встреча может быть нереалистичной, предлагаю онлайн."
+            )
+            online_suggested = True
 
     others = [pid for pid in all_ids if pid != user.id]
 
@@ -593,6 +608,26 @@ def _handle_create_event(settings, db, user, nr, result, now):
             "Очный формат может быть нереалистичен из-за времени на дорогу — можно перевести встречу в онлайн.")
         result.suggested_actions.append(SuggestedAction(
             type="confirm", label="Сделать онлайн", style="ghost", action_id=action.action_id))
+
+
+def _last_offline_city_before(db, user_id, start) -> str | None:
+    """Город последней очной встречи пользователя в тот же день до ``start`` (FN-13)."""
+    day_start = start.replace(hour=0, minute=0, second=0, microsecond=0)
+    stmt = (
+        select(CalendarEvent)
+        .where(
+            CalendarEvent.owner_id == user_id,
+            CalendarEvent.status != STATUS_CANCELLED,
+            CalendarEvent.location_type.in_(("offline", "hybrid")),
+            CalendarEvent.end_at <= start,
+            CalendarEvent.start_at >= day_start,
+            CalendarEvent.city != "",
+        )
+        .order_by(CalendarEvent.end_at.desc())
+        .limit(1)
+    )
+    event = db.execute(stmt).scalars().first()
+    return event.city if event else None
 
 
 def _build_reschedule_plan(db, settings, conflict, participant_ids, now) -> dict | None:
@@ -753,6 +788,9 @@ def _handle_find_tickets(settings, db, user, nr, result, now):
                              payload={"origin": tr.origin_city, "destination": tr.destination_city,
                                       "source_mode": "sites", "count": len(sources)})
         return
+    # FN-06/BUG-26: предпочтения управляют сортировкой, фильтры применяются к выдаче.
+    prefs = set(tr.preferences or [])
+    sort_by = "duration" if "fastest" in prefs else "price"
     try:
         options = travel_search.search(
             settings,
@@ -762,22 +800,34 @@ def _handle_find_tickets(settings, db, user, nr, result, now):
             tr.transport_type,
             return_date=ret,
             preferences=tr.preferences,
+            sort_by=sort_by,
         )
     except TicketSearchError as exc:
         result.status = "error"
         result.reply = f"Не удалось выполнить поиск билетов: {exc}"
         return
+    applied: list[str] = []
+    if "direct" in prefs:
+        options = [o for o in options if o.transfers == 0]
+        applied.append("без пересадок")
+    if tr.budget:
+        options = [o for o in options if o.price <= tr.budget]
+        applied.append(f"до {tr.budget:.0f} {settings.tickets.currency}")
     options = options[:6]
     result.status = "done"
     result.travel_options = [o.model_dump(mode="json") for o in options]
     if not options:
-        result.reply = "Не удалось подобрать варианты — уточните города и дату."
+        result.reply = "Не удалось подобрать варианты — уточните города и дату" + (
+            f" (фильтры: {', '.join(applied)})." if applied else "."
+        )
         return
     best = options[0]
+    best_label = "Быстрее всего" if sort_by == "duration" else "Дешевле всего"
     result.reply = (
         f"Нашёл {len(options)} вариантов {tr.origin_city} → {tr.destination_city}"
         + (f" на {tr.departure_date:%d.%m}" if tr.departure_date else "")
-        + f". Дешевле всего: {travel_search.explain_option(best)}."
+        + (f" ({', '.join(applied)})" if applied else "")
+        + f". {best_label}: {travel_search.explain_option(best)}."
     )
     result.cards.append(AssistantCard(kind="travel_options", title="Варианты поездки",
                                        data={"origin": tr.origin_city, "destination": tr.destination_city,
@@ -801,8 +851,10 @@ def _handle_show_calendar(settings, db, user, nr, result, now):
         include_cancelled=True,
     )
     result.status = "done"
+    # BUG-25: отменённые не считаем в «у вас N встреч», но показываем в карточке.
+    active_count = sum(1 for e in events if e.status != STATUS_CANCELLED)
     who = "у вас" if target.id == user.id else f"у {target.full_name or target.email}"
-    result.reply = f"На период {requested_range.label} {who} {len(events)} встреч."
+    result.reply = f"На период {requested_range.label} {who} {active_count} встреч."
     result.cards.append(AssistantCard(kind="calendar", title="Календарь недели",
                                        data={"week_start": requested_range.start.isoformat(),
                                              "employee": calendar_context.employee_summary(target, settings),
@@ -889,6 +941,14 @@ def _emit_protocol(settings, db, user, protocol: ProtocolData, result: Assistant
         events_payload = _followups_to_events(settings, protocol)
         action = create_action(db, user, ACTION_CREATE_EVENTS_FROM_PROTOCOL,
                                "Встречи из протокола", {"events": events_payload})
+        # FN-05: предпросмотр — пользователь видит, ЧТО именно подтверждает.
+        result.cards.append(AssistantCard(
+            kind="followups", title="Встречи к созданию",
+            data={"events": [
+                {"title": e["title"], "start_at": e["start_at"], "end_at": e["end_at"],
+                 "location_type": e["location_type"]}
+                for e in events_payload
+            ]}))
         result.suggested_actions.append(SuggestedAction(
             type="confirm", label=f"Создать {n_follow} встреч(и)", style="primary",
             action_id=action.action_id))

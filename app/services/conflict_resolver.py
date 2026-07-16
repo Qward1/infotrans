@@ -57,6 +57,7 @@ class ConflictInfo:
     owner_id: int
     overlap_minutes: int
     is_high_priority: bool
+    owner_name: str = ""  # FN-03: чья встреча конфликтует — видно в карточке
 
     def to_dict(self) -> dict:
         return {
@@ -66,6 +67,7 @@ class ConflictInfo:
             "end_at": self.end.isoformat(),
             "priority": self.priority,
             "owner_id": self.owner_id,
+            "owner_name": self.owner_name,
             "overlap_minutes": self.overlap_minutes,
             "is_high_priority": self.is_high_priority,
         }
@@ -156,6 +158,7 @@ def resolve_conflicts(
     for e in neighbours:
         ov = _overlap_minutes(proposed.start, proposed.end, e.start_at, e.end_at)
         if ov > 0:
+            owner = e.owner
             conflicts.append(
                 ConflictInfo(
                     event_id=e.id,
@@ -166,6 +169,7 @@ def resolve_conflicts(
                     owner_id=e.owner_id,
                     overlap_minutes=ov,
                     is_high_priority=e.priority >= threshold,
+                    owner_name=(owner.full_name or owner.email) if owner else "",
                 )
             )
 

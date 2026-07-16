@@ -174,22 +174,35 @@ def find_free_slots(
     ]
     windows = _scheduling_free_slots(busy, range_start, range_end, duration, work_start, work_end)
 
+    # FN-02: внутри каждого окна варианты с шагом slot_granularity_minutes,
+    # равномерно по дням (не все limit-варианты в один день), сортировка по времени.
+    granularity = max(5, settings.scheduling.slot_granularity_minutes)
+    candidates_by_day: dict = {}
+    for w in windows:
+        cursor = w.start
+        while cursor + timedelta(minutes=duration) <= w.end:
+            candidates_by_day.setdefault(cursor.date(), []).append(cursor)
+            cursor += timedelta(minutes=granularity)
+
+    picked: list[datetime] = []
+    day_queues = [list(v) for _, v in sorted(candidates_by_day.items())]
+    while len(picked) < limit and any(day_queues):
+        for queue in day_queues:
+            if queue and len(picked) < limit:
+                picked.append(queue.pop(0))
+    picked.sort()
+
     meeting_place = location_service.Place(format=meeting_format, city=city, address=address)
     n = len(participant_ids)
     who = "у вас" if n <= 1 else f"у всех {n} участников"
 
     suggestions: list[SlotSuggestion] = []
-    for w in windows:
-        slot_start = w.start
+    for slot_start in picked:
         slot_end = slot_start + timedelta(minutes=duration)
-        if slot_end > w.end:
-            continue
         reason = (
             f"Свободно {who} · {slot_start:%a %d.%m %H:%M}–{slot_end:%H:%M} · "
             f"в рабочих часах {work_start:%H:%M}–{work_end:%H:%M}"
         )
         warnings = _travel_warnings(events, slot_start, slot_end, meeting_place, settings)
         suggestions.append(SlotSuggestion(slot_start, slot_end, reason, warnings))
-        if len(suggestions) >= limit:
-            break
     return suggestions

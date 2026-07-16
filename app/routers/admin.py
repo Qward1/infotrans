@@ -1,7 +1,9 @@
 """Админ-страницы: пользователи и статистика."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request
+from datetime import datetime, timedelta
+
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -40,13 +42,21 @@ def admin_users(
 @router.get("/stats")
 def admin_stats(
     request: Request,
+    week: str | None = Query(default=None, description="Неделя статистики, YYYY-MM-DD"),
     db: Session = Depends(get_db),
     user: User = Depends(require_admin),
 ):
+    # FN-09: навигация по неделям недельной статистики.
+    reference = datetime.now()
+    if week:
+        try:
+            reference = datetime.strptime(week, "%Y-%m-%d")
+        except ValueError:
+            pass
     overview = stats_service.system_overview(db)
     status_counts = stats_service.status_breakdown(db)
     per_user = stats_service.per_user_stats(db)
-    weekly = stats_service.weekly_load(db)
+    weekly = stats_service.weekly_load(db, reference)
     formats = stats_service.format_breakdown(db)
     priorities = stats_service.priority_breakdown(db)
     days = stats_service.busiest_days(db)
@@ -62,6 +72,8 @@ def admin_stats(
         status_counts=status_counts,
         per_user=per_user,
         weekly=weekly,
+        week_prev=(weekly["week_start"] - timedelta(days=7)).strftime("%Y-%m-%d"),
+        week_next=(weekly["week_start"] + timedelta(days=7)).strftime("%Y-%m-%d"),
         formats=formats,
         priorities=priorities,
         busiest_days=days,

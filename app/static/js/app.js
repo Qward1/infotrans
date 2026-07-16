@@ -1039,7 +1039,7 @@
 
     function conflictHtml(d) {
       const rows = (d.conflicts || []).map((c) =>
-        `<div class="a-slot"><div>⛔ <b>${esc(c.title)}</b> · ${fmtDT(c.start_at)}–${fmtT(c.end_at)} · приоритет ${c.priority}` +
+        `<div class="a-slot"><div>⛔ ${c.owner_name ? `у ${esc(c.owner_name)}: ` : ""}<b>${esc(c.title)}</b> · ${fmtDT(c.start_at)}–${fmtT(c.end_at)} · приоритет ${c.priority}` +
         (c.is_high_priority ? " · высокий" : "") + `</div></div>`).join("");
       return `<div class="a-card-title">⚠️ Конфликт расписания</div>` +
         (d.explanation ? `<div class="a-card-row">${esc(d.explanation)}</div>` : "") + rows;
@@ -1076,6 +1076,14 @@
       else if (card.kind === "travel_options") el.innerHTML = `<div class="a-card-title">🎫 ${esc(card.title)}</div>` + ticketsHtml(d.options || []);
       else if (card.kind === "travel_sources") el.innerHTML = `<div class="a-card-title">🔎 ${esc(card.title)}</div>` + travelSourcesHtml(d.sources || []);
       else if (card.kind === "protocol") el.innerHTML = protocolHtml(d);
+      else if (card.kind === "followups") {
+        // FN-05: предпросмотр встреч, которые будут созданы из протокола.
+        el.innerHTML = `<div class="a-card-title">📅 ${esc(card.title)}</div>` +
+          (d.events || []).map((e) =>
+            `<div class="a-slot"><div><b>${fmtDT(e.start_at)}–${fmtT(e.end_at)}</b> ${esc(e.title)}` +
+            `<div class="a-muted">${esc(LOC_RU[e.location_type] || e.location_type || "")}</div></div></div>`
+          ).join("");
+      }
       else if (card.kind === "tasks") el.innerHTML = `<div class="a-card-title">✅ Задачи</div><ul>` + (d.items || []).map((i) => `<li>${esc(i)}</li>`).join("") + "</ul>";
       else if (card.kind === "conflict") el.innerHTML = conflictHtml(d);
       else if (card.kind === "employee_availability") el.innerHTML = `<div class="a-card-title">🟢 ${esc(card.title)}</div>` + employeeAvailabilityHtml(d.items || []);
@@ -1083,8 +1091,11 @@
       else if (card.kind === "reminder") el.innerHTML = `<div class="a-card-title">⏰ Напоминание</div><div class="a-card-row">${esc((d.event||{}).title||"")} · за ${d.minutes_before} мин (${fmtDT(d.remind_at)})</div>`;
       else if (card.kind === "summary" || card.kind === "calendar") {
         const evs = d.events || d.upcoming || [];
+        // BUG-25: отменённые показываем зачёркнутыми.
         el.innerHTML = `<div class="a-card-title">🗓️ ${esc(card.title)}</div>` +
-          (evs.length ? evs.map((e) => `<div class="a-slot"><div><b>${fmtDT(e.start_at)}</b> ${esc(e.title)}</div></div>`).join("") : "<div class='a-muted'>Пусто</div>");
+          (evs.length ? evs.map((e) =>
+            `<div class="a-slot${e.status === "cancelled" ? " cancelled" : ""}"><div><b>${fmtDT(e.start_at)}</b> ${esc(e.title)}${e.status === "cancelled" ? ' <span class="a-muted">(отменена)</span>' : ""}</div></div>`
+          ).join("") : "<div class='a-muted'>Пусто</div>");
       } else el.innerHTML = `<div class="a-card-title">${esc(card.title)}</div>`;
 
       el.querySelectorAll("[data-slot]").forEach((b) => {
@@ -1673,7 +1684,12 @@
         html += `<div class="proto-sec"><b>Сроки</b>${ul(p.deadlines)}</div>`;
       if (p.risks && p.risks.length)
         html += `<div class="proto-sec"><b>Риски</b>${ul(p.risks)}</div>`;
-      if (fu.length)
+      // FN-05: если бэкенд прислал предпросмотр с датами — показываем его.
+      const fuCard = (data.cards || []).find((c) => c.kind === "followups");
+      const fuEvents = fuCard && fuCard.data ? fuCard.data.events || [] : null;
+      if (fuEvents && fuEvents.length)
+        html += `<div class="proto-sec"><b>Будут созданы встречи</b>${ul(fuEvents, (m) => m.title + " · " + fmtDateTime(m.start_at))}</div>`;
+      else if (fu.length)
         html += `<div class="proto-sec"><b>Предлагаемые follow-up встречи</b>${ul(fu, (m) => m.title + (m.date_hint ? " · " + m.date_hint : ""))}</div>`;
       protoBody.innerHTML = html;
 
@@ -1711,7 +1727,8 @@
         `<div class="prio" style="background:var(--chip-bg); color:var(--accent-strong);">📄</div>` +
         `<div class="body"><div class="title">${escHtml(filename)}</div>` +
         `<div class="sub muted">только что</div></div>` +
-        `<button class="btn small primary" data-make-protocol="${docId}">Сформировать протокол</button>`;
+        `<button class="btn small primary" data-make-protocol="${docId}">Сформировать протокол</button>` +
+        `<button class="btn icon ghost" data-delete-doc="${docId}" title="Удалить документ" aria-label="Удалить документ">×</button>`;
       docList.insertBefore(row, docList.firstChild);
       bindProtocolButtons();
     }
@@ -1756,6 +1773,21 @@
         if (b.dataset.bound) return;
         b.dataset.bound = "1";
         b.addEventListener("click", () => makeProtocol(b.getAttribute("data-make-protocol")));
+      });
+      // FN-12: удаление документа с подтверждением.
+      document.querySelectorAll("[data-delete-doc]").forEach((b) => {
+        if (b.dataset.bound) return;
+        b.dataset.bound = "1";
+        b.addEventListener("click", async () => {
+          const ok = await window.uiConfirm("Удалить документ? Файл и извлечённый текст будут стёрты.", { danger: true });
+          if (!ok) return;
+          try {
+            await window.api("DELETE", `/api/documents/${b.getAttribute("data-delete-doc")}`);
+            const row = b.closest("[data-doc-id]");
+            if (row) row.remove();
+            window.toast("Документ удалён");
+          } catch (e) { window.toast(e.message, "err"); }
+        });
       });
     }
 
@@ -1909,6 +1941,9 @@
         sort,
       });
       if (returnDate) params.set("return_date", returnDate);
+      // BUG-26: бюджет и «без пересадок» фильтруются на сервере.
+      if (!isNaN(budget) && budget > 0) params.set("budget", String(budget));
+      if (prefs.includes("direct")) params.set("direct", "true");
 
       results.innerHTML = spinner("Ищу варианты…");
       countEl.textContent = "";
@@ -1916,8 +1951,6 @@
         const payload = await window.api("GET", "/api/tickets/search?" + params.toString());
         let data = Array.isArray(payload) ? payload : (payload.items || []);
         const sources = Array.isArray(payload) ? [] : (payload.external_searches || []);
-        if (!isNaN(budget) && budget > 0) data = data.filter((o) => o.price <= budget);
-        if (prefs.includes("direct")) data = data.filter((o) => o.transfers === 0);
         if (sort === "duration") data = data.slice().sort((a, b) => a.duration_minutes - b.duration_minutes);
         else if (sort === "departure") data = data.slice().sort((a, b) => new Date(a.depart_at) - new Date(b.depart_at));
         else data = data.slice().sort((a, b) => a.price - b.price);

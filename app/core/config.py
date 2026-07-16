@@ -148,6 +148,8 @@ class NotificationsConfig(BaseModel):
     # Каналы доставки, включённые для demo (отображаются в настройках).
     channels: list[str] = Field(default_factory=lambda: ["web", "messenger", "email"])
     messenger: MessengerConfig = Field(default_factory=MessengerConfig)
+    # FN-08: фоновая отправка напоминаний (asyncio-задача в lifespan, раз в 60с).
+    reminders_enabled: bool = True
 
 
 class DemoConfig(BaseModel):

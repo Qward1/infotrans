@@ -70,13 +70,33 @@ def system_overview(db: Session) -> dict:
 
 
 def conflicts_count(db: Session) -> int:
-    """Число пересекающихся пар встреч по всем пользователям (за ±30 дней)."""
+    """Число пересекающихся пар встреч по всем пользователям (за ±30 дней).
+
+    BUG-18: один запрос всех не-отменённых событий окна и группировка по
+    владельцу в Python — вместо отдельного запроса на каждого пользователя.
+    Статистика намеренно считается по владельцам (см. BUG-32): конфликт пары
+    встреч учитывается один раз, а не для каждого приглашённого.
+    """
     now = datetime.now()
     start, end = now - timedelta(days=30), now + timedelta(days=30)
-    user_ids = [uid for (uid,) in db.execute(select(User.id))]
+    stmt = select(CalendarEvent).where(
+        CalendarEvent.status != STATUS_CANCELLED,
+        CalendarEvent.start_at < end,
+        CalendarEvent.end_at > start,
+    )
+    by_owner: dict[int, list[CalendarEvent]] = {}
+    for event in db.execute(stmt).scalars():
+        by_owner.setdefault(event.owner_id, []).append(event)
     total = 0
-    for uid in user_ids:
-        total += len(scheduling_service.conflicts_for_user(db, uid, start, end))
+    for events in by_owner.values():
+        busy = [
+            scheduling_service.BusyInterval(
+                start=e.start_at, end=e.end_at, priority=e.priority,
+                title=e.title, event_id=e.id,
+            )
+            for e in events
+        ]
+        total += len(scheduling_service.detect_conflicts(busy))
     return total
 
 

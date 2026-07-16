@@ -112,6 +112,12 @@ def get(db: Session, document_id: int) -> Document | None:
     return db.get(Document, document_id)
 
 
+def delete(db: Session, document: Document) -> None:
+    """Удалить документ (FN-12). Протоколы — payload действий, ссылок на строку нет."""
+    db.delete(document)
+    db.commit()
+
+
 def list_for_user(db: Session, owner_id: int, limit: int = 50) -> list[Document]:
     """Документы пользователя, новые сверху."""
     from sqlalchemy import select

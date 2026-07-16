@@ -9,22 +9,34 @@
 
 {% block content %}
 <section class="panel glass">
+  <div class="flex between items-center wrap gap-8 mb-3">
+    <input id="user-filter" class="cal-goto" style="min-width:260px;" placeholder="Поиск по имени или email"
+           aria-label="Поиск по имени или email" autocomplete="off" />
+    <span class="muted" id="user-filter-count"></span>
+  </div>
   <div class="table-wrap">
     <table class="data"><caption class="sr-only">Пользователи системы</caption>
       <thead>
         <tr>
-          <th scope="col">Имя</th>
-          <th scope="col">Email</th>
-          <th scope="col">Роль</th>
-          <th scope="col">Статус</th>
-          <th scope="col" class="num">Встреч</th>
-          <th scope="col">Создан</th>
+          {# FN-11: сортировка кликом по заголовку #}
+          <th scope="col" data-sort="name" class="sortable">Имя</th>
+          <th scope="col" data-sort="email" class="sortable">Email</th>
+          <th scope="col" data-sort="role" class="sortable">Роль</th>
+          <th scope="col" data-sort="active" class="sortable">Статус</th>
+          <th scope="col" data-sort="events" class="sortable num">Встреч</th>
+          <th scope="col" data-sort="created" class="sortable">Создан</th>
           <th scope="col" class="right">Действия</th>
         </tr>
       </thead>
       <tbody>
         {% for u in users %}
-        <tr>
+        <tr class="user-row"
+            data-name="{{ (u.full_name or '') | lower }}"
+            data-email="{{ u.email | lower }}"
+            data-role="{{ u.role }}"
+            data-active="{{ 1 if u.is_active else 0 }}"
+            data-events="{{ event_counts.get(u.id, 0) }}"
+            data-created="{{ u.created_at.strftime('%Y-%m-%d') }}">
           <td>
             <div class="flex items-center gap-8">
               <span class="avatar" style="width:30px;height:30px;font-size:13px;">{{ (u.full_name or u.email)[0] | upper }}</span>
@@ -67,6 +79,47 @@
 {% block extra_js %}
 <script>
   document.addEventListener("DOMContentLoaded", function () {
+    // FN-11: клиентский фильтр по имени/email.
+    var filter = document.getElementById("user-filter");
+    var countEl = document.getElementById("user-filter-count");
+    var rows = Array.from(document.querySelectorAll(".user-row"));
+    if (filter) {
+      filter.addEventListener("input", function () {
+        var q = filter.value.trim().toLowerCase();
+        var shown = 0;
+        rows.forEach(function (row) {
+          var hay = (row.getAttribute("data-name") || "") + " " + (row.getAttribute("data-email") || "");
+          var visible = !q || hay.indexOf(q) !== -1;
+          row.style.display = visible ? "" : "none";
+          if (visible) shown++;
+        });
+        if (countEl) countEl.textContent = q ? "показано: " + shown + " из " + rows.length : "";
+      });
+    }
+
+    // FN-11: сортировка кликом по заголовку (клиентская, по data-атрибутам).
+    var sortState = { key: null, dir: 1 };
+    document.querySelectorAll("th[data-sort]").forEach(function (th) {
+      th.style.cursor = "pointer";
+      th.title = "Сортировать";
+      th.addEventListener("click", function () {
+        var key = th.getAttribute("data-sort");
+        sortState.dir = sortState.key === key ? -sortState.dir : 1;
+        sortState.key = key;
+        var tbody = document.querySelector("table.data tbody");
+        var numeric = key === "events" || key === "active";
+        rows.sort(function (a, b) {
+          var av = a.getAttribute("data-" + key) || "", bv = b.getAttribute("data-" + key) || "";
+          if (numeric) return (parseFloat(av) - parseFloat(bv)) * sortState.dir;
+          return av.localeCompare(bv, "ru") * sortState.dir;
+        });
+        rows.forEach(function (row) { tbody.appendChild(row); });
+        document.querySelectorAll("th[data-sort]").forEach(function (other) {
+          other.textContent = other.textContent.replace(/ [▲▼]$/, "");
+        });
+        th.textContent = th.textContent.replace(/ [▲▼]$/, "") + (sortState.dir > 0 ? " ▲" : " ▼");
+      });
+    });
     document.querySelectorAll("[data-toggle-active]").forEach(function (b) {
       b.addEventListener("click", async function () {
         var id = b.getAttribute("data-toggle-active");

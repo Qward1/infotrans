@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -15,6 +16,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from app.bootstrap import bootstrap
 from app.core.config import BASE_DIR, get_settings
+from app.core.database import SessionLocal
 from app.core.permissions import NotAuthenticated, NotAuthorized
 from app.core.urls import local_redirect
 from app.routers import (
@@ -29,16 +31,38 @@ from app.routers import (
     settings as settings_router,
     travel,
 )
+from app.services import reminder_service
 from app.templating import render
 
 logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("smartcal.main")
+
+_REMINDER_INTERVAL_SECONDS = 60
+
+
+async def _reminders_loop() -> None:
+    """FN-08: раз в 60с отправляем наступившие напоминания (без APScheduler)."""
+    while True:
+        await asyncio.sleep(_REMINDER_INTERVAL_SECONDS)
+        try:
+            if not get_settings().notifications.reminders_enabled:
+                continue
+            with SessionLocal() as db:
+                reminder_service.send_due_reminders(db, get_settings())
+        except Exception:  # noqa: BLE001 — фоновая задача не должна падать
+            logger.exception("Ошибка фоновой отправки напоминаний")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Инициализация БД / seed-админ / demo-данные при старте.
     bootstrap()
+    reminders_task = None
+    if get_settings().notifications.reminders_enabled:
+        reminders_task = asyncio.create_task(_reminders_loop())
     yield
+    if reminders_task is not None:
+        reminders_task.cancel()
 
 
 settings = get_settings()
