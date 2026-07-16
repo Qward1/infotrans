@@ -49,6 +49,8 @@
     <div
       class="chat-log"
       id="chat-log"
+      role="log"
+      aria-live="polite"
       data-greeting="Здравствуйте, {{ current_user.full_name or current_user.email }}! Я ассистент умного календаря. Помогу найти свободные окна, проверить конфликты и подобрать билеты. Спросите, например: «Когда я свободен на этой неделе?»"
     >
     </div>
@@ -66,7 +68,7 @@
       <button class="btn icon ghost" id="chat-side-toggle" type="button" aria-label="Свернуть подсказки">›</button>
     </div>
     <div class="chat-side-content">
-      <div class="hint" style="margin-bottom:12px;">Нажмите, чтобы отправить</div>
+      <div class="hint mb-3">Нажмите, чтобы отправить</div>
       <div class="suggest">
         <button class="btn small ghost" data-suggest="Поставь встречу с Анной завтра в 15:00 на час">📅 Поставь встречу с Анной завтра в 15:00 на час</button>
         <button class="btn small ghost" data-suggest="Покажи мой календарь на неделю">📆 Покажи мой календарь на неделю</button>

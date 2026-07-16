@@ -15,7 +15,12 @@
   function applyTheme(theme) {
     document.documentElement.setAttribute("data-theme", theme);
     const btn = document.getElementById("theme-toggle");
-    if (btn) btn.textContent = theme === "dark" ? "☀️" : "🌙";
+    if (btn) {
+      // UI-02: иконка из SVG-спрайта; fallback на эмодзи для страниц без спрайта.
+      const use = btn.querySelector("use");
+      if (use) use.setAttribute("href", theme === "dark" ? "#i-sun" : "#i-moon");
+      else btn.textContent = theme === "dark" ? "☀️" : "🌙";
+    }
   }
   window.toggleTheme = function () {
     const cur = document.documentElement.getAttribute("data-theme") || "light";
@@ -23,7 +28,8 @@
     localStorage.setItem(THEME_KEY, next);
     applyTheme(next);
   };
-  applyTheme(localStorage.getItem(THEME_KEY) || "light");
+  // UI-08: тема уже выставлена инлайн-скриптом (localStorage или системная).
+  applyTheme(document.documentElement.getAttribute("data-theme") || "light");
 
   /* --------------------------- Сайдбар --------------------------- */
   const SIDEBAR_KEY = "smartcal-sidebar-collapsed";
@@ -33,7 +39,7 @@
     const btn = document.getElementById("sidebar-toggle");
     if (!btn) return;
     const collapsed = document.documentElement.classList.contains("sidebar-collapsed");
-    btn.textContent = sidebarMq.matches ? "☰" : (collapsed ? "»" : "☰");
+    // Иконка «меню» из спрайта постоянна — обновляем только aria-атрибуты.
     btn.setAttribute("aria-label", sidebarMq.matches ? "Меню" : (collapsed ? "Развернуть меню" : "Свернуть меню"));
     btn.setAttribute("aria-expanded", sidebarMq.matches ? "true" : String(!collapsed));
   }
@@ -55,21 +61,82 @@
   applySidebarCollapsed(localStorage.getItem(SIDEBAR_KEY) === "1");
   sidebarMq.addEventListener("change", updateSidebarButton);
 
-  /* ----------------------------- Тосты ----------------------------- */
+  /* ------------------- Тосты (UX-15: a11y и управление) ------------------- */
   function toast(msg, kind) {
     let wrap = document.querySelector(".toast-wrap");
     if (!wrap) {
       wrap = document.createElement("div");
       wrap.className = "toast-wrap";
+      wrap.setAttribute("role", "status");
+      wrap.setAttribute("aria-live", "polite");
       document.body.appendChild(wrap);
     }
     const el = document.createElement("div");
     el.className = "toast " + (kind === "err" ? "err" : "ok");
-    el.textContent = msg;
+    const text = document.createElement("span");
+    text.textContent = msg;
+    el.appendChild(text);
+    const close = document.createElement("button");
+    close.className = "toast-close";
+    close.setAttribute("aria-label", "Закрыть уведомление");
+    close.textContent = "×";
+    el.appendChild(close);
     wrap.appendChild(el);
-    setTimeout(() => el.remove(), 3200);
+    // Ошибки живут дольше; hover ставит таймер на паузу.
+    let timer = setTimeout(() => el.remove(), kind === "err" ? 6000 : 3200);
+    close.addEventListener("click", () => { clearTimeout(timer); el.remove(); });
+    el.addEventListener("mouseenter", () => clearTimeout(timer));
+    el.addEventListener("mouseleave", () => { timer = setTimeout(() => el.remove(), 1600); });
   }
   window.toast = toast;
+
+  /* ------- Модальный хелпер (BUG-11/UX-10): Esc, focus trap, возврат фокуса ------- */
+  const FOCUSABLE =
+    'a[href], button:not([disabled]), input:not([disabled]):not([type=hidden]), ' +
+    'select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+  function openModalEl(backdrop) {
+    if (!backdrop) return;
+    backdrop.classList.add("open");
+    const modal = backdrop.querySelector(".modal") || backdrop;
+    modal.setAttribute("role", "dialog");
+    modal.setAttribute("aria-modal", "true");
+    const heading = modal.querySelector("h1, h2, h3");
+    if (heading) {
+      if (!heading.id) heading.id = "modal-title-" + Math.random().toString(36).slice(2, 8);
+      modal.setAttribute("aria-labelledby", heading.id);
+    }
+    const trigger = document.activeElement;
+    const first = modal.querySelector(FOCUSABLE);
+    if (first) first.focus();
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        closeModalEl(backdrop);
+      } else if (e.key === "Tab") {
+        const items = Array.from(modal.querySelectorAll(FOCUSABLE)).filter((n) => n.offsetParent !== null);
+        if (!items.length) return;
+        const firstEl = items[0], lastEl = items[items.length - 1];
+        if (e.shiftKey && document.activeElement === firstEl) { e.preventDefault(); lastEl.focus(); }
+        else if (!e.shiftKey && document.activeElement === lastEl) { e.preventDefault(); firstEl.focus(); }
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    backdrop.__modalState = { trigger, onKey };
+  }
+
+  function closeModalEl(backdrop) {
+    if (!backdrop) return;
+    backdrop.classList.remove("open");
+    const state = backdrop.__modalState;
+    if (state) {
+      document.removeEventListener("keydown", state.onKey);
+      if (state.trigger && typeof state.trigger.focus === "function") state.trigger.focus();
+      backdrop.__modalState = null;
+    }
+  }
+  window.openModalEl = openModalEl;
+  window.closeModalEl = closeModalEl;
 
   /* ----------------- Единый confirm-диалог (UX-13) ----------------- */
   let confirmModal = null;
@@ -234,7 +301,7 @@
         }
       }
       deleteBtn.style.display = editing && !readOnly ? "inline-flex" : "none";
-      eventModal.classList.add("open");
+      openModalEl(eventModal);
     }
     function defaultStart() {
       const d = new Date();
@@ -243,8 +310,8 @@
       return d;
     }
     window.openEventModal = openEvent;
-    window.closeEventModal = () => eventModal.classList.remove("open");
-    eventModal.addEventListener("click", (e) => { if (e.target === eventModal) eventModal.classList.remove("open"); });
+    window.closeEventModal = () => closeModalEl(eventModal);
+    eventModal.addEventListener("click", (e) => { if (e.target === eventModal) closeModalEl(eventModal); });
 
     // UX-04: «Окончание» следует за «Началом», сохраняя длительность.
     const startInput = f.elements["start_at"];
@@ -339,7 +406,7 @@
           await api("POST", "/api/events", payload);
           toast("Встреча создана");
         }
-        eventModal.classList.remove("open");
+        closeModalEl(eventModal);
         emitEventChanged();
       } catch (err) {
         showFormError(f, err.message);
@@ -354,10 +421,20 @@
       try {
         await api("DELETE", `/api/events/${id}`);
         toast("Встреча удалена");
-        eventModal.classList.remove("open");
+        closeModalEl(eventModal);
         emitEventChanged();
       } catch (err) { showFormError(f, err.message); }
     });
+
+    // BUG-11: Enter/Space работают как клик на «кнопочных» элементах.
+    function activateOnKeydown(node) {
+      node.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          node.click();
+        }
+      });
+    }
 
     function bindEventTriggers(root) {
       root = root || document;
@@ -368,6 +445,7 @@
           try { openEvent(JSON.parse(node.getAttribute("data-event"))); }
           catch (e) { /* ignore */ }
         });
+        if (node.getAttribute("role") === "button") activateOnKeydown(node);
       });
       root.querySelectorAll("[data-new-event]").forEach((node) => {
         if (node.dataset.newEventBound) return;
@@ -683,7 +761,7 @@
       if (calAbort) calAbort.abort();
       calAbort = new AbortController();
       const signal = calAbort.signal;
-      calendarBody.innerHTML = loadingCal("Обновляю календарь…");
+      calendarBody.innerHTML = `<div class="calendar-skeleton glass">${'<div class="sk-col"></div>'.repeat(7)}</div>`;
       const params = new URLSearchParams({ view, date });
       const selectedUserId = userId !== undefined
         ? userId
@@ -1445,11 +1523,11 @@
       f.elements["password"].value = "";
       f.elements["password"].required = !editing;
       if (pwHint) pwHint.style.display = editing ? "block" : "none";
-      userModal.classList.add("open");
+      openModalEl(userModal);
     }
     window.openUserModal = openUser;
-    window.closeUserModal = () => userModal.classList.remove("open");
-    userModal.addEventListener("click", (e) => { if (e.target === userModal) userModal.classList.remove("open"); });
+    window.closeUserModal = () => closeModalEl(userModal);
+    userModal.addEventListener("click", (e) => { if (e.target === userModal) closeModalEl(userModal); });
 
     f.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -1499,11 +1577,12 @@
         const data = await api("GET", "/api/notifications");
         if (data.unread > 0) { badge.style.display = "grid"; badge.textContent = data.unread > 99 ? "99+" : data.unread; }
         else { badge.style.display = "none"; }
+        notifBtn.setAttribute("aria-label", data.unread > 0 ? `Уведомления, ${data.unread} непрочитанных` : "Уведомления");
         if (!data.items.length) { list.innerHTML = '<div class="a-muted">Пока нет уведомлений</div>'; return; }
         list.innerHTML = data.items.map((n) => {
           const d = new Date(n.created_at).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
           const unread = n.status !== "read" ? ' style="border-left:3px solid var(--accent)"' : "";
-          return `<div class="notif-item"${unread}><div class="t">${(n.title || "").replace(/[<>&]/g, "")}</div><div class="x">${(n.text || "").replace(/[<>&]/g, "")}</div><div class="x">${d}</div></div>`;
+          return `<div class="notif-item"${unread}><div class="t">${escHtml(n.title || "")}</div><div class="x">${escHtml(n.text || "")}</div><div class="x">${d}</div></div>`;
         }).join("");
       } catch (e) { /* not logged in / ignore */ }
     }

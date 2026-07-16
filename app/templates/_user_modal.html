@@ -3,37 +3,37 @@
   <div class="modal glass">
     <div class="modal-head">
       <h2 id="user-modal-title">Новый пользователь</h2>
-      <button type="button" class="close" onclick="closeUserModal()">×</button>
+      <button type="button" class="close" aria-label="Закрыть" onclick="closeUserModal()">×</button>
     </div>
     <form>
       <input type="hidden" name="id" />
       <div class="field">
-        <label>Email</label>
-        <input name="email" type="email" placeholder="user@company.ru" />
+        <label for="um-email">Email</label>
+        <input id="um-email" name="email" type="email" placeholder="user@company.ru" />
       </div>
       <div class="field">
-        <label>Имя</label>
-        <input name="full_name" placeholder="Иван Иванов" />
+        <label for="um-name">Имя</label>
+        <input id="um-name" name="full_name" placeholder="Иван Иванов" />
       </div>
       <div class="form-row">
         <div class="field">
-          <label>Роль</label>
-          <select name="role">
+          <label for="um-role">Роль</label>
+          <select id="um-role" name="role">
             <option value="user">Пользователь</option>
             <option value="admin">Администратор</option>
           </select>
         </div>
         <div class="field">
-          <label>Статус</label>
-          <select name="is_active">
+          <label for="um-active">Статус</label>
+          <select id="um-active" name="is_active">
             <option value="true">Активен</option>
             <option value="false">Отключён</option>
           </select>
         </div>
       </div>
       <div class="field">
-        <label>Пароль</label>
-        <input name="password" type="password" minlength="6" placeholder="минимум 6 символов" />
+        <label for="um-password">Пароль</label>
+        <input id="um-password" name="password" type="password" minlength="6" placeholder="минимум 6 символов" />
         <span class="muted" data-role="pw-hint" style="font-size:12px; display:none;">
           Оставьте пустым, чтобы не менять пароль.
         </span>

@@ -21,6 +21,29 @@
   --topbar-h: 64px;
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
 
+  /* UI-01: шкала отступов вместо magic numbers */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 40px;
+  --space-8: 48px;
+
+  /* UI-01: типографическая шкала */
+  --fs-xs: 12px;
+  --fs-sm: 13px;
+  --fs-base: 14px;
+  --fs-md: 16px;
+  --fs-lg: 18px;
+  --fs-xl: 22px;
+  --fs-2xl: 28px;
+
+  /* UI-07: токены длительности анимаций */
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
     Arial, "Noto Sans", sans-serif;
 }
@@ -31,7 +54,10 @@
   --bg-grad-2: #eef2ff;
   --bg-grad-3: #f6f9ff;
   --text: #14213d;
-  --text-muted: #5a6b8c;
+  /* UI-09: затемнён для контраста ≥4.5:1 на полупрозрачных панелях */
+  --text-muted: #4c5d80;
+  /* UI-09: текстовая роль warning (фон остаётся светлее) */
+  --warning-text: #935e07;
   --panel-bg: rgba(255, 255, 255, 0.55);
   --panel-border: rgba(255, 255, 255, 0.7);
   --panel-shadow: 0 10px 30px rgba(31, 69, 176, 0.12);
@@ -76,6 +102,7 @@
   --divider: rgba(140, 165, 230, 0.16);
   --success: #3ad698;
   --warning: #f0b64d;
+  --warning-text: #f0b64d; /* в тёмной теме сам warning достаточно контрастен */
   --danger: #ff6d80;
   --surface-1: rgba(30, 42, 74, 0.55);
   --surface-2: rgba(18, 27, 50, 0.5);
@@ -167,7 +194,7 @@ a:hover { text-decoration: underline; }
   display: flex; align-items: center; gap: 12px;
   padding: 10px 12px; border-radius: 12px;
   color: var(--text); font-weight: 500; text-decoration: none;
-  transition: background 0.15s ease, transform 0.05s ease;
+  transition: background var(--dur-base) var(--ease), transform var(--dur-fast) var(--ease);
 }
 .nav a .ic { width: 20px; text-align: center; opacity: 0.9; }
 .nav-label { white-space: nowrap; }
@@ -243,7 +270,7 @@ a:hover { text-decoration: underline; }
   gap: 16px; padding: 12px 18px; margin-bottom: 20px;
   position: relative; z-index: 70;
 }
-.topbar h1 { font-size: 20px; margin: 0; }
+.topbar h1 { font-size: var(--fs-xl); font-weight: 700; margin: 0; }
 .topbar .subtitle { color: var(--text-muted); font-size: 13px; }
 .topbar-actions { display: flex; align-items: center; gap: 10px; }
 
@@ -286,7 +313,7 @@ a:hover { text-decoration: underline; }
 }
 .chip.gray { background: var(--divider); color: var(--text-muted); }
 .chip.green { background: rgba(26,159,107,0.15); color: var(--success); }
-.chip.amber { background: rgba(217,138,18,0.15); color: var(--warning); }
+.chip.amber { background: rgba(217,138,18,0.15); color: var(--warning-text); }
 .chip.red { background: rgba(224,71,91,0.15); color: var(--danger); }
 
 .grid { display: grid; gap: 18px; }
@@ -300,13 +327,13 @@ a:hover { text-decoration: underline; }
 
 .stat { padding: 20px; display: flex; flex-direction: column; gap: 6px; }
 .stat .label { color: var(--text-muted); font-size: 13px; font-weight: 500; }
-.stat .value { font-size: 30px; font-weight: 700; line-height: 1; }
+.stat .value { font-size: var(--fs-2xl); font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
 .stat .value .ic { font-size: 22px; margin-right: 8px; }
 
 /* Панель-секция с заголовком */
 .panel { padding: 20px 22px; }
 .panel-head { display:flex; align-items:center; justify-content: space-between; margin-bottom: 14px; gap: 12px;}
-.panel-head h2 { font-size: 16px; margin: 0; }
+.panel-head h2 { font-size: 15px; font-weight: 700; margin: 0; }
 
 /* Списки событий */
 .event-row {
@@ -354,7 +381,7 @@ input, select, textarea {
   font: inherit; color: var(--text);
   background: var(--input-bg); border: 1px solid var(--input-border);
   border-radius: 11px; padding: 10px 12px; width: 100%;
-  transition: border 0.15s ease, box-shadow 0.15s ease;
+  transition: border var(--dur-base) var(--ease), box-shadow var(--dur-base) var(--ease);
 }
 input:focus, select:focus, textarea:focus {
   outline: none; border-color: var(--accent);
@@ -429,7 +456,7 @@ textarea { resize: vertical; min-height: 72px; }
   border: 1px solid rgba(59,116,255,0.28);
   transition: transform 0.05s ease, box-shadow 0.15s ease;
 }
-.cal-event:hover { transform: translateY(-1px); box-shadow: 0 6px 14px rgba(43,91,224,0.2); }
+.cal-event:hover { transform: translateY(-1px); box-shadow: var(--elev-1); }
 .cal-event .ce-time { font-size: 12px; font-weight: 700; color: var(--accent-strong); }
 .cal-event .ce-title { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cal-event .ce-loc { font-size: 11px; color: var(--text-muted); }
@@ -472,7 +499,7 @@ textarea { resize: vertical; min-height: 72px; }
 /* Карточки ассистента внутри сообщения бота */
 .a-card {
   margin-top: 10px; padding: 12px 14px; border-radius: 12px;
-  background: var(--chip-bg); border: 1px solid rgba(59,116,255,0.22);
+  background: var(--surface-1); border: 1px solid var(--divider);
   box-shadow: var(--elev-1);
 }
 .a-slot { transition: background 0.16s var(--ease), border-color 0.16s var(--ease); }
@@ -490,7 +517,7 @@ textarea { resize: vertical; min-height: 72px; }
 .a-card-title { font-weight: 700; font-size: 14px; margin-bottom: 6px; }
 .a-card-row { font-size: 13px; margin-bottom: 4px; }
 .a-muted { color: var(--text-muted); font-size: 12px; }
-.a-warn { color: var(--warning); font-size: 12px; margin-top: 4px; }
+.a-warn { color: var(--warning-text); font-size: 12px; margin-top: 4px; }
 .a-sec { margin-top: 8px; font-size: 13px; }
 .a-sec b { display:block; margin-bottom: 2px; font-size: 12px; text-transform: uppercase; letter-spacing: .03em; color: var(--text-muted); }
 .a-sec ul, .a-card ul { margin: 2px 0 0; padding-left: 18px; }
@@ -710,6 +737,30 @@ textarea { resize: vertical; min-height: 72px; }
 /* Ссылка «Все уведомления» в топбар-панели */
 .notif-all-link { display: flex; justify-content: center; margin-top: 8px; }
 
+/* UI-11: «глазок» пароля на странице входа */
+.password-field { position: relative; }
+.password-field input { padding-right: 42px; }
+.pw-toggle {
+  position: absolute;
+  right: 8px;
+  bottom: 7px;
+  border: 0;
+  background: none;
+  font-size: 16px;
+  cursor: pointer;
+  opacity: 0.65;
+  padding: 4px 6px;
+  border-radius: 8px;
+}
+.pw-toggle:hover { opacity: 1; }
+.pw-toggle[aria-pressed="true"] { opacity: 1; color: var(--accent-strong); }
+
+/* UI-02: SVG-иконки из спрайта */
+.ic-svg { width: 20px; height: 20px; vertical-align: -4px; flex: none; }
+.brand .logo .ic-svg { width: 22px; height: 22px; vertical-align: middle; }
+.btn .ic-svg { width: 18px; height: 18px; vertical-align: -3px; }
+.nav .ic .ic-svg { display: block; margin: 0 auto; }
+
 /* ============================ Progress bars (stats) ============================ */
 .bar { height: 8px; border-radius: 999px; background: var(--divider); overflow: hidden; }
 .bar > span { display:block; height:100%; border-radius:999px; background: linear-gradient(90deg, var(--accent), var(--accent-strong)); }
@@ -734,12 +785,12 @@ textarea { resize: vertical; min-height: 72px; }
 .badge-admin { background: linear-gradient(120deg, var(--accent), var(--accent-strong)); color: var(--on-accent); }
 .badge-user { background: var(--divider); color: var(--text-muted); }
 .badge-online { background: rgba(59,116,255,0.15); color: var(--accent-strong); }
-.badge-offline { background: rgba(217,138,18,0.16); color: var(--warning); }
+.badge-offline { background: rgba(217,138,18,0.16); color: var(--warning-text); }
 .badge-hybrid { background: rgba(26,159,107,0.16); color: var(--success); }
 .badge.invited { background: rgba(26,159,107,0.16); color: var(--success); }
 .prio-low { background: var(--divider); color: var(--text-muted); }
 .prio-mid { background: rgba(59,116,255,0.14); color: var(--accent-strong); }
-.prio-high { background: rgba(217,138,18,0.18); color: var(--warning); }
+.prio-high { background: rgba(217,138,18,0.18); color: var(--warning-text); }
 .prio-critical { background: rgba(224,71,91,0.18); color: var(--danger); }
 .conflict-flag { background: rgba(224,71,91,0.18); color: var(--danger); }
 
@@ -974,7 +1025,7 @@ textarea { resize: vertical; min-height: 72px; }
   display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center;
   padding: 18px 12px; border-radius: 14px; cursor: pointer; color: var(--text);
   background: var(--input-bg); border: 1px solid var(--divider);
-  transition: transform 0.06s ease, box-shadow 0.15s ease, background 0.15s ease;
+  transition: transform var(--dur-fast) var(--ease), box-shadow var(--dur-base) var(--ease), background var(--dur-base) var(--ease);
 }
 .qa:hover { transform: translateY(-2px); box-shadow: 0 10px 22px rgba(43,91,224,0.18); text-decoration: none; background: var(--glass-hover); }
 .qa .qa-ic { font-size: 26px; }
@@ -1170,3 +1221,131 @@ textarea { resize: vertical; min-height: 72px; }
 .flex { display:flex; } .between { justify-content: space-between; } .items-center { align-items:center; }
 .gap-8 { gap: 8px; } .gap-12 { gap: 12px; } .wrap { flex-wrap: wrap; }
 .nowrap { white-space: nowrap; }
+
+/* ============================================================================
+   Этап 3: UI-редизайн — цветовое кодирование, a11y, motion, утилиты
+   ============================================================================ */
+
+/* UI-03: фон события по приоритету (слабая заливка + насыщенная полоса слева) */
+.cal-event.p-low { background: rgba(122, 139, 170, 0.10); }
+.cal-event.p-mid { background: rgba(59, 116, 255, 0.10); }
+.cal-event.p-high { background: rgba(217, 138, 18, 0.12); }
+.cal-event.p-critical { background: rgba(224, 71, 91, 0.12); }
+:root[data-theme="dark"] .cal-event.p-low { background: rgba(159, 176, 212, 0.12); }
+:root[data-theme="dark"] .cal-event.p-mid { background: rgba(92, 141, 255, 0.14); }
+:root[data-theme="dark"] .cal-event.p-high { background: rgba(240, 182, 77, 0.14); }
+:root[data-theme="dark"] .cal-event.p-critical { background: rgba(255, 109, 128, 0.14); }
+.cal-event.conflict::after {
+  content: "⚠";
+  position: absolute;
+  top: 2px;
+  right: 5px;
+  font-size: 10px;
+  color: var(--danger);
+}
+.cal-event { position: relative; }
+
+/* UI-06: единый focus-контракт для всей интерактивной поверхности */
+a:focus-visible,
+[role="button"]:focus-visible,
+[tabindex="0"]:focus-visible,
+.nav a:focus-visible,
+.qa:focus-visible,
+.event-row:focus-visible,
+.cal-event:focus-visible,
+.chat-history-main:focus-visible,
+.admin-user-pill:focus-visible,
+.month-more:focus-visible,
+.month-day-num:focus-visible,
+.suggest-item:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+  border-radius: 10px;
+}
+
+/* UI-10: скрытый текст для скринридеров */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* UX-15: тосты — доступность и кнопка закрытия */
+.toast { display: flex; align-items: center; gap: 10px; }
+.toast .toast-close {
+  border: 0; background: none; color: inherit; font: inherit;
+  font-size: 16px; line-height: 1; cursor: pointer; opacity: 0.7; padding: 0 2px;
+}
+.toast .toast-close:hover { opacity: 1; }
+
+/* UI-01: утилиты отступов (по шкале --space-*) */
+.mb-0 { margin-bottom: 0 !important; }
+.mb-1 { margin-bottom: var(--space-1) !important; }
+.mb-2 { margin-bottom: var(--space-2) !important; }
+.mb-3 { margin-bottom: var(--space-3) !important; }
+.mb-4 { margin-bottom: var(--space-4) !important; }
+.mb-5 { margin-bottom: var(--space-5) !important; }
+.mb-6 { margin-bottom: var(--space-6) !important; }
+.mt-1 { margin-top: var(--space-1) !important; }
+.mt-2 { margin-top: var(--space-2) !important; }
+.mt-3 { margin-top: var(--space-3) !important; }
+.mt-4 { margin-top: var(--space-4) !important; }
+.mt-5 { margin-top: var(--space-5) !important; }
+.gap-4 { gap: var(--space-1); }
+.gap-16 { gap: var(--space-4); }
+
+/* UI-14: промежуточный breakpoint 1081–1280 — 4 KPI в 2 колонки */
+@media (max-width: 1280px) {
+  .grid.cols-4 { grid-template-columns: repeat(2, 1fr); }
+  .quick-actions { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* UX-14: sticky колонка часов при горизонтальном скролле сетки */
+.timegrid-hours {
+  position: sticky;
+  left: -12px; /* компенсирует padding контейнера */
+  z-index: 4;
+  background: var(--panel-bg);
+  backdrop-filter: blur(10px);
+}
+.timegrid-corner {
+  left: -12px;
+  z-index: 6;
+}
+.calendar-timegrid .timegrid-corner { position: sticky; }
+
+/* UI-12: скелетон сетки календаря */
+.calendar-skeleton {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 10px;
+  padding: 16px;
+}
+.calendar-skeleton .sk-col {
+  height: 320px;
+  border-radius: 12px;
+  background-image: var(--skeleton);
+  background-size: 200% 100%;
+  animation: skeleton 1.2s ease-in-out infinite;
+}
+
+/* UI-07: prefers-reduced-motion — почти всё без анимаций (WCAG 2.3.3) */
+@media (prefers-reduced-motion: reduce) {
+  *:not(.spinner),
+  *:not(.spinner)::before,
+  *:not(.spinner)::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

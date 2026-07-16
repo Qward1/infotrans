@@ -3,31 +3,31 @@
   <div class="modal glass">
     <div class="modal-head">
       <h2 id="event-modal-title">Новая встреча</h2>
-      <button type="button" class="close" onclick="closeEventModal()">×</button>
+      <button type="button" class="close" aria-label="Закрыть" onclick="closeEventModal()">×</button>
     </div>
     <form>
       <input type="hidden" name="id" />
       <input type="hidden" name="owner_id" />
       <div class="alert info" id="event-owner-note" style="display:none;"></div>
       <div class="field">
-        <label>Название</label>
-        <input name="title" required maxlength="255" placeholder="Например: Встреча с подрядчиком" />
+        <label for="ev-title">Название</label>
+        <input id="ev-title" name="title" required maxlength="255" placeholder="Например: Встреча с подрядчиком" />
       </div>
       <div class="field">
-        <label>Описание</label>
-        <textarea name="description" placeholder="Повестка, ссылки, заметки…"></textarea>
+        <label for="ev-description">Описание</label>
+        <textarea id="ev-description" name="description" placeholder="Повестка, ссылки, заметки…"></textarea>
       </div>
       <div class="form-row">
         <div class="field">
-          <label>Начало</label>
-          <input name="start_at" type="datetime-local" required />
+          <label for="ev-start">Начало</label>
+          <input id="ev-start" name="start_at" type="datetime-local" required />
         </div>
         <div class="field">
-          <label>Окончание</label>
-          <input name="end_at" type="datetime-local" required />
+          <label for="ev-end">Окончание</label>
+          <input id="ev-end" name="end_at" type="datetime-local" required />
         </div>
       </div>
-      <div class="duration-presets" aria-label="Быстрый выбор длительности">
+      <div class="duration-presets" role="group" aria-label="Быстрый выбор длительности">
         <button type="button" class="btn small ghost" data-duration="30">30м</button>
         <button type="button" class="btn small ghost" data-duration="45">45м</button>
         <button type="button" class="btn small ghost" data-duration="60">1ч</button>
@@ -36,39 +36,39 @@
       </div>
       <div class="form-row">
         <div class="field">
-          <label>Формат</label>
-          <select name="location_type">
+          <label for="ev-location-type">Формат</label>
+          <select id="ev-location-type" name="location_type">
             <option value="offline">Офлайн</option>
             <option value="online">Онлайн</option>
             <option value="hybrid">Гибрид</option>
           </select>
         </div>
         <div class="field">
-          <label>Город</label>
-          <input name="city" placeholder="Москва" />
+          <label for="ev-city">Город</label>
+          <input id="ev-city" name="city" placeholder="Москва" />
         </div>
       </div>
       <div class="field">
-        <label>Адрес</label>
-        <input name="address" placeholder="ул. Тверская, 1" />
+        <label for="ev-address">Адрес</label>
+        <input id="ev-address" name="address" placeholder="ул. Тверская, 1" />
       </div>
       <div class="field">
-        <label>Ссылка на встречу</label>
-        <input name="meeting_url" placeholder="https://meet.example.com/..." />
+        <label for="ev-url">Ссылка на встречу</label>
+        <input id="ev-url" name="meeting_url" placeholder="https://meet.example.com/..." />
       </div>
       <div class="field participants-field">
-        <label>Участники</label>
-        <input name="participants" placeholder="имя или email — подсказки появятся при вводе" autocomplete="off" />
+        <label for="ev-participants">Участники</label>
+        <input id="ev-participants" name="participants" placeholder="имя или email — подсказки появятся при вводе" autocomplete="off" />
         <div class="suggest-box" id="participants-suggest" style="display:none;"></div>
       </div>
       <div class="form-row">
         <div class="field">
-          <label>Приоритет (0–10)</label>
-          <input name="priority" type="number" min="0" max="10" value="5" />
+          <label for="ev-priority">Приоритет (0–10)</label>
+          <input id="ev-priority" name="priority" type="number" min="0" max="10" value="5" />
         </div>
         <div class="field">
-          <label>Важность</label>
-          <select name="importance">
+          <label for="ev-importance">Важность</label>
+          <select id="ev-importance" name="importance">
             <option value="low">Низкая</option>
             <option value="normal" selected>Обычная</option>
             <option value="high">Высокая</option>
@@ -77,8 +77,8 @@
         </div>
       </div>
       <div class="field">
-        <label>Статус</label>
-        <select name="status">
+        <label for="ev-status">Статус</label>
+        <select id="ev-status" name="status">
           <option value="planned">Запланирована</option>
           <option value="completed">Проведена</option>
           <option value="cancelled">Отменена</option>

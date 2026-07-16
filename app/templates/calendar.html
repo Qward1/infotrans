@@ -74,7 +74,7 @@
   </div>
 </section>
 
-<div id="calendar-body" style="margin-top:16px;"></div>
+<div id="calendar-body" class="mt-4"></div>
 <script type="application/json" id="calendar-initial">{{ calendar_payload | tojson }}</script>
 
 <!-- Модалка поиска свободного слота -->
@@ -82,7 +82,8 @@
   <div class="modal glass">
     <div class="modal-head">
       <h2>Найти свободный слот</h2>
-      <button type="button" class="close" onclick="document.getElementById('slot-modal').classList.remove('open')">×</button>
+      <button type="button" class="close" aria-label="Закрыть"
+              onclick="window.closeModalEl(document.getElementById('slot-modal'))">×</button>
     </div>
     <div class="form-row">
       <div class="field">
@@ -95,7 +96,7 @@
       </div>
     </div>
     <button class="btn primary" id="slot-search" style="width:100%; justify-content:center;">Найти окна</button>
-    <div id="slot-results" class="slot-list" style="margin-top:16px;"></div>
+    <div id="slot-results" class="slot-list mt-4"></div>
   </div>
 </div>
 
@@ -124,8 +125,8 @@
       });
     }
 
-    openBtn.addEventListener("click", function () { modal.classList.add("open"); });
-    modal.addEventListener("click", function (e) { if (e.target === modal) modal.classList.remove("open"); });
+    openBtn.addEventListener("click", function () { window.openModalEl(modal); });
+    modal.addEventListener("click", function (e) { if (e.target === modal) window.closeModalEl(modal); });
 
     searchBtn.addEventListener("click", async function () {
       var dur = parseInt(document.getElementById("slot-duration").value, 10) || 60;
@@ -149,7 +150,7 @@
         }).join("");
         out.querySelectorAll("[data-take]").forEach(function (b) {
           b.addEventListener("click", function () {
-            modal.classList.remove("open");
+            window.closeModalEl(modal);
             if (window.openEventModal) window.openEventModal(JSON.parse(b.getAttribute("data-take")));
           });
         });

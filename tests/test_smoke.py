@@ -231,6 +231,35 @@ def test_adaptive_chat_ui_hooks_render(client):
     assert ".chat-shell.chat-side-collapsed" in css
 
 
+def test_ui_redesign_markers(client):
+    """Этап 3: SVG-спрайт, aria-разметка, системная тема, reduced-motion."""
+    settings = get_settings()
+    client.post(
+        "/login",
+        data={"email": settings.seed_admin.email, "password": settings.seed_admin.password},
+    )
+    html = client.get("/dashboard").text
+    assert 'id="i-calendar"' in html  # SVG-спрайт подключён
+    assert 'aria-label="Основное меню"' in html
+    assert 'aria-current="page"' in html
+    assert 'prefers-color-scheme' in html  # UI-08: дефолт из системной темы
+
+    chat_html = client.get("/chat").text
+    assert 'role="log"' in chat_html
+
+    css = client.get("/static/css/app.css").text
+    assert "prefers-reduced-motion" in css  # UI-07
+    assert "--space-1" in css and "--fs-xs" in css  # UI-01 токены
+    assert ".sr-only" in css  # UI-10
+
+    client.get("/logout")
+    login_html = client.get("/login").text
+    assert 'id="pw-toggle"' in login_html  # UI-11: «глазок» пароля
+    assert 'role="alert"' not in login_html  # ошибок нет — алерта нет
+    r = client.post("/login", data={"email": "x@x.x", "password": "bad"})
+    assert 'role="alert"' in r.text  # ошибка логина объявляется скринридеру
+
+
 def test_travel_page_uses_dedicated_layout(client):
     settings = get_settings()
     client.post(

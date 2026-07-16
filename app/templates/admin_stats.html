@@ -5,7 +5,7 @@
 
 {% block content %}
 <!-- KPI -->
-<div class="grid cols-4" style="margin-bottom:18px;">
+<div class="grid cols-4 mb-4">
   <div class="stat glass">
     <span class="label">Всего встреч</span>
     <span class="value"><span class="ic">📆</span>{{ overview.total_events }}</span>
@@ -29,7 +29,7 @@
 </div>
 
 <!-- Часы встреч за неделю + количество -->
-<div class="grid cols-2" style="margin-bottom:18px;">
+<div class="grid cols-2 mb-4">
   <section class="panel glass">
     <div class="panel-head">
       <h2>Время на встречах за неделю</h2>
@@ -37,7 +37,7 @@
     </div>
     {% set max_min = (weekly.rows | map(attribute='minutes') | max) if weekly.rows else 0 %}
     {% for r in weekly.rows %}
-    <div style="margin-bottom:12px;">
+    <div class="mb-3">
       <div class="stat-row">
         <span class="k">{{ r.full_name }}</span>
         <strong>{{ r.hours }} ч <span class="muted" style="font-weight:500;">· {{ r.meetings }} встреч</span></strong>
@@ -64,12 +64,12 @@
 </div>
 
 <!-- Форматы + приоритеты -->
-<div class="grid cols-2" style="margin-bottom:18px;">
+<div class="grid cols-2 mb-4">
   <section class="panel glass">
     <div class="panel-head"><h2>Форматы встреч</h2></div>
     {% set total_fmt = (formats | map(attribute='count') | sum) %}
     {% for f in formats %}
-    <div style="margin-bottom:12px;">
+    <div class="mb-3">
       <div class="stat-row">
         <span class="k">
           {% if f.key == 'online' %}<span class="badge badge-online">● {{ f.label }}</span>
@@ -106,7 +106,7 @@
     <div class="table-wrap">
       <table class="data">
         <thead>
-          <tr><th>Сотрудник</th><th class="num">Всего</th><th class="num">План</th><th class="num">Провед.</th><th class="num">Отмен.</th><th>Загрузка</th></tr>
+          <tr><th scope="col">Сотрудник</th><th scope="col" class="num">Всего</th><th scope="col" class="num">План</th><th scope="col" class="num">Провед.</th><th scope="col" class="num">Отмен.</th><th scope="col">Загрузка</th></tr>
         </thead>
         <tbody>
           {% for r in per_user %}
@@ -132,7 +132,7 @@
   </section>
 
   <div>
-    <section class="panel glass" style="margin-bottom:18px;">
+    <section class="panel glass mb-4">
       <div class="panel-head"><h2>Статусы встреч</h2></div>
       {% set total_status = status_counts.planned + status_counts.completed + status_counts.cancelled %}
       {% for key, label, cls in [('planned','Запланированы','chip'), ('completed','Проведены','chip green'), ('cancelled','Отменены','chip red')] %}
@@ -150,7 +150,7 @@
       <div class="panel-head"><h2>Журнал аудита</h2><span class="muted">последние {{ audit | length }}</span></div>
       <div class="table-wrap" style="max-height:300px; overflow-y:auto;">
         <table class="data">
-          <thead><tr><th>Время</th><th>Кто</th><th>Действие</th><th>Объект</th></tr></thead>
+          <thead><tr><th scope="col">Время</th><th scope="col">Кто</th><th scope="col">Действие</th><th scope="col">Объект</th></tr></thead>
           <tbody>
             {% for a in audit %}
             <tr>
