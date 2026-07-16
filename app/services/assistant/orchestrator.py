@@ -16,7 +16,7 @@ import re
 import uuid
 from datetime import datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
@@ -27,6 +27,8 @@ from app.models.assistant import (
     ACTION_CREATE_EVENTS_FROM_PROTOCOL,
     ACTION_CREATE_REMINDER,
     ACTION_DELETE_EVENT,
+    ACTION_EXPIRED,
+    ACTION_IN_PROGRESS,
     ACTION_MOVE_EVENT,
     ACTION_PENDING,
     ACTION_REJECTED,
@@ -1116,6 +1118,63 @@ def reject_action(db: Session, user: User, action_id: str) -> dict:
     return {"ok": True, "status": action.status}
 
 
+def expire_stale_actions(db: Session, now: datetime | None = None) -> int:
+    """Пометить протухшие pending-черновики как expired (BUG-22, один UPDATE)."""
+    now = now or datetime.now()
+    result = db.execute(
+        update(AssistantAction)
+        .where(
+            AssistantAction.status == ACTION_PENDING,
+            AssistantAction.expires_at.is_not(None),
+            AssistantAction.expires_at < now,
+        )
+        .values(status=ACTION_EXPIRED)
+    )
+    db.commit()
+    return int(result.rowcount or 0)
+
+
+def _recheck_conflicts(db, settings, user, action, payload) -> list | None:
+    """Повторная проверка конфликтов перед исполнением (BUG-06).
+
+    Между черновиком и подтверждением расписание могло измениться. Для
+    create/move без явного ``force`` пересчитываем конфликты; список непуст →
+    исполнение отклоняется."""
+    if action.type not in (ACTION_CREATE_EVENT, ACTION_MOVE_EVENT) or payload.get("force"):
+        return None
+
+    if action.type == ACTION_CREATE_EVENT:
+        participant_ids, _ = _resolve_participant_ids(db, payload.get("participants", []))
+        all_ids = list(dict.fromkeys([user.id, *participant_ids]))
+        proposed = conflict_resolver.ProposedEvent(
+            start=datetime.fromisoformat(payload["start_at"]),
+            end=datetime.fromisoformat(payload["end_at"]),
+            priority=payload.get("priority", 5),
+            format=payload.get("location_type", "offline"),
+            city=payload.get("city", ""),
+            address=payload.get("address", ""),
+            title=payload.get("title", "Встреча"),
+        )
+    else:  # ACTION_MOVE_EVENT
+        event = calendar_service.get_event(db, payload.get("event_id"))
+        if event is None:
+            return None  # стандартная ошибка «Событие не найдено» дальше по коду
+        participant_ids = [p.user_id for p in event.participants]
+        all_ids = list(dict.fromkeys([event.owner_id, *participant_ids]))
+        proposed = conflict_resolver.ProposedEvent(
+            start=datetime.fromisoformat(payload["start_at"]),
+            end=datetime.fromisoformat(payload["end_at"]),
+            priority=event.priority,
+            format=event.location_type,
+            city=event.city,
+            address=event.address,
+            title=event.title,
+            exclude_event_id=event.id,
+        )
+    resolve = conflict_resolver.resolve_conflicts(db, settings, proposed, all_ids)
+    return None if resolve.can_schedule else resolve.conflicts
+
+
 def confirm_action(db: Session, settings: Settings, user: User, action_id: str) -> dict:
     action = _get_action(db, user, action_id)
     if action is None:
@@ -1123,7 +1182,39 @@ def confirm_action(db: Session, settings: Settings, user: User, action_id: str) 
     if action.status != ACTION_PENDING:
         return {"ok": False, "detail": f"Действие уже {action.status}"}
 
+    # BUG-05: просроченный черновик не исполняем (подтверждение из старой вкладки).
+    now = datetime.now()
+    if action.expires_at and action.expires_at < now:
+        action.status = ACTION_EXPIRED
+        db.commit()
+        return {"ok": False, "detail": "Черновик устарел — сформируйте запрос заново"}
+
+    # BUG-07: атомарный захват статуса — двум параллельным confirm достанется один.
+    captured = db.execute(
+        update(AssistantAction)
+        .where(AssistantAction.id == action.id, AssistantAction.status == ACTION_PENDING)
+        .values(status=ACTION_IN_PROGRESS)
+    )
+    db.commit()
+    if captured.rowcount != 1:
+        db.refresh(action)
+        return {"ok": False, "detail": f"Действие уже {action.status}"}
+    db.refresh(action)
+
     payload = json.loads(action.payload_json or "{}")
+
+    # BUG-06: между черновиком и подтверждением мог появиться новый конфликт.
+    conflicts = _recheck_conflicts(db, settings, user, action, payload)
+    if conflicts:
+        action.status = ACTION_PENDING  # черновик остаётся, пользователь решает сам
+        db.commit()
+        summary = "; ".join(f"«{c.title}» {c.start:%d.%m %H:%M}" for c in conflicts[:3])
+        return {
+            "ok": False,
+            "detail": f"Появился конфликт: {summary}. Выберите другое время или подтвердите заново.",
+            "conflicts": [c.to_dict() for c in conflicts],
+        }
+
     out: dict = {"ok": True, "type": action.type}
 
     try:

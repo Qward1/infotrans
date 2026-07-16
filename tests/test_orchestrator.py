@@ -164,6 +164,80 @@ def test_needs_clarification_when_missing(db, user):
     assert db.query(CalendarEvent).count() == 0
 
 
+def _pending_action_id(db, user, message):
+    """Создать черновик через диалог и вернуть action_id confirm-кнопки."""
+    res = orchestrator.run(SETTINGS, db, user, message, now=NOW)
+    assert res.status == "needs_confirmation", res.reply
+    return next(a.action_id for a in res.suggested_actions if a.type == "confirm")
+
+
+def test_expired_action_is_not_executed(db, user):
+    """BUG-05: подтверждение просроченного черновика не исполняется."""
+    guest = User(email="exp@test.local", password_hash=hash_password("x"), role=ROLE_USER, is_active=True)
+    db.add(guest); db.commit()
+    action_id = _pending_action_id(db, user, "встреча с exp@test.local 11.07 в 14:00 онлайн")
+
+    action = db.query(AssistantAction).filter_by(action_id=action_id).first()
+    action.expires_at = datetime.now() - timedelta(hours=1)
+    db.commit()
+
+    out = orchestrator.confirm_action(db, SETTINGS, user, action_id)
+    assert out["ok"] is False
+    assert "устарел" in out["detail"]
+    assert db.query(CalendarEvent).count() == 0
+    db.refresh(action)
+    assert action.status == "expired"
+
+
+def test_expire_stale_actions_cleanup(db, user):
+    """BUG-22: пакетная чистка протухших pending-черновиков."""
+    guest = User(email="stale@test.local", password_hash=hash_password("x"), role=ROLE_USER, is_active=True)
+    db.add(guest); db.commit()
+    action_id = _pending_action_id(db, user, "встреча с stale@test.local 11.07 в 16:00 онлайн")
+    action = db.query(AssistantAction).filter_by(action_id=action_id).first()
+    action.expires_at = datetime.now() - timedelta(days=2)
+    db.commit()
+
+    assert orchestrator.expire_stale_actions(db) == 1
+    db.refresh(action)
+    assert action.status == "expired"
+    # повторный вызов ничего не находит
+    assert orchestrator.expire_stale_actions(db) == 0
+
+
+def test_confirm_rechecks_conflicts(db, user):
+    """BUG-06: конфликт, появившийся между черновиком и confirm, блокирует исполнение."""
+    guest = User(email="cc@test.local", password_hash=hash_password("x"), role=ROLE_USER, is_active=True)
+    db.add(guest); db.commit()
+    action_id = _pending_action_id(db, user, "встреча с cc@test.local 11.07 в 14:00 онлайн")
+
+    # Пока черновик ждал подтверждения, у владельца появилась встреча на то же время.
+    _make_event(db, user, title="Внезапная встреча", start=datetime(2026, 7, 11, 14, 0))
+
+    out = orchestrator.confirm_action(db, SETTINGS, user, action_id)
+    assert out["ok"] is False
+    assert "конфликт" in out["detail"].lower()
+    assert out["conflicts"]
+    # черновик возвращён в pending, встреча ассистентом не создана
+    action = db.query(AssistantAction).filter_by(action_id=action_id).first()
+    assert action.status == "pending"
+    assert db.query(CalendarEvent).count() == 1  # только «Внезапная встреча»
+
+
+def test_in_progress_action_cannot_be_confirmed_twice(db, user):
+    """BUG-07: захваченное (in_progress) действие не исполняется параллельно."""
+    guest = User(email="race@test.local", password_hash=hash_password("x"), role=ROLE_USER, is_active=True)
+    db.add(guest); db.commit()
+    action_id = _pending_action_id(db, user, "встреча с race@test.local 11.07 в 09:00 онлайн")
+    action = db.query(AssistantAction).filter_by(action_id=action_id).first()
+    action.status = "in_progress"
+    db.commit()
+
+    out = orchestrator.confirm_action(db, SETTINGS, user, action_id)
+    assert out["ok"] is False
+    assert db.query(CalendarEvent).count() == 0
+
+
 def _turn(db, user, chat, message, now):
     """Смоделировать один ход API-чата: user-сообщение → run → assistant-сообщение."""
     chat_history.add_message(db, chat, "user", message)

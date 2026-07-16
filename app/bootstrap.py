@@ -293,6 +293,8 @@ def _seed_demo(db: Session, settings: Settings) -> None:
 
 def bootstrap() -> None:
     """Полная инициализация приложения (идемпотентна)."""
+    from app.services.assistant import orchestrator
+
     settings = get_settings()
     init_db()
     with SessionLocal() as db:
@@ -300,3 +302,7 @@ def bootstrap() -> None:
         if created is not None:
             logger.info("Создан seed-админ: %s", created.email)
         _seed_demo(db, settings)
+        # BUG-22: протухшие pending-черновики помечаем expired, чтобы не копились.
+        expired = orchestrator.expire_stale_actions(db)
+        if expired:
+            logger.info("Помечено просроченных черновиков действий: %d", expired)

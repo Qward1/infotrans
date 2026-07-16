@@ -68,6 +68,7 @@ class AssistantChatMessage(Base):
 # --- AssistantAction -------------------------------------------------------- #
 # Действие, предложенное ассистентом и требующее подтверждения пользователя.
 ACTION_PENDING = "pending"
+ACTION_IN_PROGRESS = "in_progress"  # атомарный захват на время исполнения (BUG-07)
 ACTION_CONFIRMED = "confirmed"
 ACTION_REJECTED = "rejected"
 ACTION_EXPIRED = "expired"
