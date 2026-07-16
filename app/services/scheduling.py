@@ -134,13 +134,14 @@ def _events_to_busy(events: list[CalendarEvent]) -> list[BusyInterval]:
 
 def free_slots_for_user(
     db: Session,
-    owner_id: int,
+    user_id: int,
     range_start: datetime,
     range_end: datetime,
     duration_minutes: int = 60,
 ) -> list[FreeSlot]:
-    events = calendar_service.list_events_in_range(
-        db, owner_id, range_start, range_end, include_cancelled=False
+    """Свободные окна пользователя с учётом встреч, где он участник (BUG-02)."""
+    events = calendar_service.list_events_for_user(
+        db, user_id, range_start, range_end, include_cancelled=False
     )
     return find_free_slots(
         _events_to_busy(events), range_start, range_end, duration_minutes
@@ -148,9 +149,10 @@ def free_slots_for_user(
 
 
 def conflicts_for_user(
-    db: Session, owner_id: int, range_start: datetime, range_end: datetime
+    db: Session, user_id: int, range_start: datetime, range_end: datetime
 ) -> list[Conflict]:
-    events = calendar_service.list_events_in_range(
-        db, owner_id, range_start, range_end, include_cancelled=False
+    """Конфликты пользователя с учётом встреч, где он участник (BUG-02)."""
+    events = calendar_service.list_events_for_user(
+        db, user_id, range_start, range_end, include_cancelled=False
     )
     return detect_conflicts(_events_to_busy(events))

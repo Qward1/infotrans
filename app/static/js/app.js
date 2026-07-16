@@ -105,15 +105,26 @@
     const f = eventModal.querySelector("form");
     const titleEl = document.getElementById("event-modal-title");
     const deleteBtn = eventModal.querySelector("[data-role=delete]");
+    const submitBtn = f.querySelector("button[type=submit]");
     const ownerNote = document.getElementById("event-owner-note");
+
+    function canEditEvent(data, editing) {
+      // Сервер присылает явный can_edit; иначе выводим из владельца события.
+      if (data.can_edit === false) return false;
+      if (data.can_edit === true || !editing) return true;
+      const viewer = window.APP_USER || null;
+      if (!viewer || data.owner_id == null) return true;
+      return viewer.is_admin || String(data.owner_id) === String(viewer.id);
+    }
 
     function openEvent(data) {
       f.reset();
       data = data || {};
       const editing = !!data.id;
+      const readOnly = editing && !canEditEvent(data, editing);
       const calendarContext = window.smartcalCalendarContext || {};
       const owner = data.owner || calendarContext.owner || null;
-      titleEl.textContent = editing ? "Редактирование встречи" : "Новая встреча";
+      titleEl.textContent = readOnly ? "Просмотр встречи" : editing ? "Редактирование встречи" : "Новая встреча";
       f.elements["id"].value = data.id || "";
       f.elements["owner_id"].value = data.owner_id || (owner && owner.id) || "";
       f.elements["title"].value = data.title || "";
@@ -130,13 +141,26 @@
       f.elements["priority"].value = data.priority != null ? data.priority : 5;
       f.elements["importance"].value = data.importance || "normal";
       f.elements["status"].value = data.status || "planned";
+      // Приглашённый участник видит встречу без возможности правки (FN-01).
+      Array.from(f.elements).forEach((el) => {
+        if (el.name) el.disabled = readOnly;
+      });
+      if (submitBtn) submitBtn.style.display = readOnly ? "none" : "";
       if (ownerNote) {
-        const ownerName = (owner && (owner.full_name || owner.email)) || data.owner_name || "";
-        const foreign = calendarContext.adminView || (owner && String(owner.id) !== String(calendarContext.viewerId || ""));
-        ownerNote.style.display = foreign && ownerName ? "block" : "none";
-        ownerNote.textContent = ownerName ? "Вы редактируете календарь: " + ownerName : "";
+        const eventOwnerName = data.owner_name || (owner && (owner.full_name || owner.email)) || "";
+        if (readOnly) {
+          ownerNote.style.display = "block";
+          ownerNote.textContent = eventOwnerName
+            ? "Вы приглашены на встречу. Организатор: " + eventOwnerName + " — только просмотр."
+            : "Вы приглашены на встречу — только просмотр.";
+        } else {
+          const ownerName = (owner && (owner.full_name || owner.email)) || data.owner_name || "";
+          const foreign = calendarContext.adminView || (owner && String(owner.id) !== String(calendarContext.viewerId || ""));
+          ownerNote.style.display = foreign && ownerName ? "block" : "none";
+          ownerNote.textContent = ownerName ? "Вы редактируете календарь: " + ownerName : "";
+        }
       }
-      deleteBtn.style.display = editing ? "inline-flex" : "none";
+      deleteBtn.style.display = editing && !readOnly ? "inline-flex" : "none";
       eventModal.classList.add("open");
     }
     function defaultStart() {
@@ -284,6 +308,8 @@
         owner_name: e.owner_name,
         participants: e.participants || [],
         status: e.status,
+        is_participant: !!e.is_participant,
+        can_edit: e.can_edit !== false,
       }));
     }
 
@@ -338,11 +364,12 @@
       const height = Math.max(28, Math.round((seg.endMin - seg.startMin) * HOUR_HEIGHT / 60) - 2);
       const left = `calc(${(seg.lane * 100 / seg.laneCount).toFixed(4)}% + 3px)`;
       const width = `calc(${(100 / seg.laneCount).toFixed(4)}% - 6px)`;
-      const cls = `cal-event timed-event p-${priorityClass(e.priority)} ${e.status === "cancelled" ? "cancelled" : ""} ${e.is_conflict ? "conflict" : ""}`;
+      const cls = `cal-event timed-event p-${priorityClass(e.priority)} ${e.status === "cancelled" ? "cancelled" : ""} ${e.is_conflict ? "conflict" : ""} ${e.is_participant ? "invited" : ""}`;
+      const invited = e.is_participant ? `<span class="ce-invited" title="Вы приглашены на эту встречу">приглашён</span>` : "";
       return (
         `<div class="${cls}" style="top:${top}px; height:${height}px; left:${left}; width:${width};" ` +
         `data-event='${eventPayload(e)}' role="button" tabindex="0" title="${escCal(e.title)}">` +
-        `<div class="ce-time">${eventTime(e.start_at)}–${eventTime(e.end_at)}</div>` +
+        `<div class="ce-time">${eventTime(e.start_at)}–${eventTime(e.end_at)}${invited}</div>` +
         `<div class="ce-title">${escCal(e.title)}</div>` +
         `<div class="ce-loc"><span class="dot ${escCal(e.location_type)}"></span>${escCal(locLabel(e))}${e.city ? " · " + escCal(e.city) : ""}</div>` +
         `</div>`
@@ -350,9 +377,9 @@
     }
 
     function compactEvent(e) {
-      const cls = `cal-event compact-event p-${priorityClass(e.priority)} ${e.status === "cancelled" ? "cancelled" : ""} ${e.is_conflict ? "conflict" : ""}`;
+      const cls = `cal-event compact-event p-${priorityClass(e.priority)} ${e.status === "cancelled" ? "cancelled" : ""} ${e.is_conflict ? "conflict" : ""} ${e.is_participant ? "invited" : ""}`;
       return (
-        `<div class="${cls}" data-event='${eventPayload(e)}' role="button" tabindex="0" title="${escCal(e.title)}">` +
+        `<div class="${cls}" data-event='${eventPayload(e)}' role="button" tabindex="0" title="${escCal(e.title)}${e.is_participant ? " (вы приглашены)" : ""}">` +
         `<div class="ce-time">${eventTime(e.start_at)}–${eventTime(e.end_at)}</div>` +
         `<div class="ce-title">${escCal(e.title)}</div>` +
         `</div>`

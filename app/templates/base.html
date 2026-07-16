@@ -9,6 +9,8 @@
   <script>
     // Базовый префикс пути (reverse-proxy) — используется fetch-запросами в app.js.
     window.APP_BASE = "{{ base }}";
+    // Текущий пользователь — для прав в UI (например, «только просмотр» чужих встреч).
+    window.APP_USER = {% if current_user %}{{ {"id": current_user.id, "is_admin": current_user.is_admin} | tojson }}{% else %}null{% endif %};
     // Применяем тему до отрисовки, чтобы не было «мигания».
     (function () {
       var t = localStorage.getItem("smartcal-theme") || "light";

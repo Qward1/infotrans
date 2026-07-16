@@ -55,7 +55,7 @@
         <a href="{{ base }}/calendar" class="btn small ghost">Календарь</a>
       </div>
       {% if today_events %}
-        {% for e in today_events %}{{ m.event_row(e) }}{% endfor %}
+        {% for e in today_events %}{{ m.event_row(e, viewer=current_user) }}{% endfor %}
       {% else %}
         <div class="empty-state"><div class="big">☕</div>На сегодня встреч нет — хорошего дня!</div>
       {% endif %}
@@ -83,7 +83,7 @@
         <a href="{{ base }}/calendar" class="btn small ghost">Открыть календарь</a>
       </div>
       {% if upcoming %}
-        {% for e in upcoming %}{{ m.event_row(e) }}{% endfor %}
+        {% for e in upcoming %}{{ m.event_row(e, viewer=current_user) }}{% endfor %}
       {% else %}
         <div class="empty-state">
           <div class="big">🗓️</div>

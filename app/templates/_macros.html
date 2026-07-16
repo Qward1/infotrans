@@ -13,7 +13,10 @@
   "meeting_url": e.meeting_url,
   "priority": e.priority,
   "importance": e.importance,
-  "status": e.status
+  "status": e.status,
+  "owner_id": e.owner_id,
+  "owner_name": (e.owner.full_name or e.owner.email) if e.owner else "",
+  "participants": e.participants | map(attribute="user.email") | list
 } | tojson }}
 {%- endmacro -%}
 
@@ -44,14 +47,15 @@
   {%- if p >= 9 -%}prio-critical{%- elif p >= 7 -%}prio-high{%- elif p >= 4 -%}prio-mid{%- else -%}prio-low{%- endif -%}
 {%- endmacro -%}
 
-{%- macro event_row(e) -%}
-<div class="event-row" data-event='{{ event_payload(e) }}' role="button" tabindex="0">
+{%- macro event_row(e, viewer=None) -%}
+{%- set invited = viewer and e.owner_id != viewer.id -%}
+<div class="event-row{% if invited %} invited{% endif %}" data-event='{{ event_payload(e) }}' role="button" tabindex="0">
   <div class="time">
     {{ e.start_at.strftime('%H:%M') }}–{{ e.end_at.strftime('%H:%M') }}
     <small>{{ e.start_at.strftime('%a %d.%m') }}</small>
   </div>
   <div class="body">
-    <div class="title">{{ e.title }}</div>
+    <div class="title">{{ e.title }}{% if invited %} <span class="badge invited" title="Вы приглашены на эту встречу">приглашён</span>{% endif %}</div>
     <div class="sub">
       <span class="dot {{ e.location_type }}"></span>
       {{ loc_label(e) }}{% if e.city %} · {{ e.city }}{% endif %}{% if e.meeting_url %} · онлайн-ссылка{% endif %}

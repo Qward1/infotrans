@@ -3,8 +3,8 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 
-from sqlalchemy import and_, select
-from sqlalchemy.orm import Session
+from sqlalchemy import and_, or_, select
+from sqlalchemy.orm import Session, selectinload
 
 from app.models.calendar import CalendarEvent, STATUS_CANCELLED
 from app.models.meeting import EventParticipant
@@ -139,6 +139,49 @@ def list_events_in_range(
     return list(db.execute(stmt).scalars().all())
 
 
+def _user_events_conditions(user_id: int):
+    """Условие «пользователь — владелец ИЛИ участник события»."""
+    participant_event_ids = select(EventParticipant.event_id).where(
+        EventParticipant.user_id == user_id
+    )
+    return or_(
+        CalendarEvent.owner_id == user_id,
+        CalendarEvent.id.in_(participant_event_ids),
+    )
+
+
+def _load_related():
+    """Жадная загрузка участников и владельца (иначе N+1 при сериализации)."""
+    return (
+        selectinload(CalendarEvent.participants).selectinload(EventParticipant.user),
+        selectinload(CalendarEvent.owner),
+    )
+
+
+def list_events_for_user(
+    db: Session,
+    user_id: int,
+    range_start: datetime,
+    range_end: datetime,
+    include_cancelled: bool = True,
+) -> list[CalendarEvent]:
+    """События, где пользователь владелец ИЛИ участник, пересекающиеся с [range_start, range_end)."""
+    conditions = [
+        _user_events_conditions(user_id),
+        CalendarEvent.start_at < range_end,
+        CalendarEvent.end_at > range_start,
+    ]
+    if not include_cancelled:
+        conditions.append(CalendarEvent.status != STATUS_CANCELLED)
+    stmt = (
+        select(CalendarEvent)
+        .where(and_(*conditions))
+        .options(*_load_related())
+        .order_by(CalendarEvent.start_at.asc())
+    )
+    return list(db.execute(stmt).scalars().all())
+
+
 def week_bounds(reference: datetime | date | None = None) -> tuple[datetime, datetime]:
     """Границы недели (Пн 00:00 — следующий Пн 00:00), содержащей reference."""
     if reference is None:
@@ -205,7 +248,7 @@ def list_period(
     view: str,
     reference: datetime | date | None = None,
 ) -> tuple[datetime, datetime, list[CalendarEvent]]:
-    """События выбранного периода.
+    """События выбранного периода (владелец или участник).
 
     Для месячного вида возвращаем события всей видимой сетки, включая дни соседних
     месяцев, чтобы сетка не подгружала события отдельными запросами.
@@ -215,7 +258,7 @@ def list_period(
         start, end = month_grid_bounds(reference)
     else:
         start, end = period_bounds(view, reference)
-    events = list_events_in_range(db, owner_id, start, end)
+    events = list_events_for_user(db, owner_id, start, end)
     return start, end, events
 
 
@@ -223,19 +266,21 @@ def list_week(
     db: Session, owner_id: int, reference: datetime | None = None
 ) -> tuple[datetime, datetime, list[CalendarEvent]]:
     start, end = week_bounds(reference)
-    events = list_events_in_range(db, owner_id, start, end)
+    events = list_events_for_user(db, owner_id, start, end)
     return start, end, events
 
 
-def upcoming_events(db: Session, owner_id: int, limit: int = 5) -> list[CalendarEvent]:
+def upcoming_events(db: Session, user_id: int, limit: int = 5) -> list[CalendarEvent]:
+    """Ближайшие не-отменённые события пользователя (владелец или участник)."""
     now = datetime.now()
     stmt = (
         select(CalendarEvent)
         .where(
-            CalendarEvent.owner_id == owner_id,
+            _user_events_conditions(user_id),
             CalendarEvent.end_at >= now,
             CalendarEvent.status != STATUS_CANCELLED,
         )
+        .options(*_load_related())
         .order_by(CalendarEvent.start_at.asc())
         .limit(limit)
     )

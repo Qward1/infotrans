@@ -678,6 +678,7 @@ textarea { resize: vertical; min-height: 72px; }
 .badge-online { background: rgba(59,116,255,0.15); color: var(--accent-strong); }
 .badge-offline { background: rgba(217,138,18,0.16); color: var(--warning); }
 .badge-hybrid { background: rgba(26,159,107,0.16); color: var(--success); }
+.badge.invited { background: rgba(26,159,107,0.16); color: var(--success); }
 .prio-low { background: var(--divider); color: var(--text-muted); }
 .prio-mid { background: rgba(59,116,255,0.14); color: var(--accent-strong); }
 .prio-high { background: rgba(217,138,18,0.18); color: var(--warning); }
@@ -692,6 +693,14 @@ textarea { resize: vertical; min-height: 72px; }
 .cal-event.p-critical { border-left-color: var(--danger); }
 .cal-event.conflict { box-shadow: 0 0 0 1.5px var(--danger) inset; }
 .ce-badges { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
+
+/* Встреча, куда пользователь приглашён (не владелец) */
+.cal-event.invited { border-left-style: dashed; }
+.ce-invited {
+  display: inline-block; margin-left: 6px; padding: 0 6px;
+  border-radius: 999px; font-size: 10px; font-weight: 700;
+  background: rgba(26,159,107,0.16); color: var(--success);
+}
 
 .view-switch { display: inline-flex; align-items: center; gap: 6px; }
 

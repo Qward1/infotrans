@@ -130,6 +130,12 @@ def calendar_payload(
             }
             for p in e.participants
         ]
+        event_owner = e.owner
+        owner_name = (
+            (event_owner.full_name or event_owner.email)
+            if event_owner
+            else (owner.full_name or owner.email)
+        )
         return {
             "id": e.id,
             "title": e.title,
@@ -144,13 +150,17 @@ def calendar_payload(
             "importance": e.importance,
             "priority": e.priority,
             "owner_id": e.owner_id,
-            "owner_name": owner.full_name or owner.email,
+            "owner_name": owner_name,
             "created_by_id": e.created_by_id,
             "updated_by_id": e.updated_by_id,
             "participants": participants,
             "status": e.status,
             "source": e.source,
             "is_conflict": e.id in conflict_ids,
+            # Владелец календаря приглашён на чужую встречу (BUG-01/FN-01).
+            "is_participant": e.owner_id != owner.id,
+            # Редактировать/удалять может только владелец события или админ.
+            "can_edit": user.is_admin or e.owner_id == user.id,
         }
 
     prev_date = _add_period(view, period_start, -1).date().isoformat()
