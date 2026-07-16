@@ -98,6 +98,17 @@ def unread_count(db: Session, user_id: int) -> int:
     return int(db.execute(stmt).scalar_one())
 
 
+def mark_read(db: Session, user_id: int, notification_id: int) -> bool:
+    """Пометить одно уведомление прочитанным (только владелец). FN-07."""
+    note = db.get(Notification, notification_id)
+    if note is None or note.user_id != user_id:
+        return False
+    if note.status != NOTIFY_READ:
+        note.status = NOTIFY_READ
+        db.commit()
+    return True
+
+
 def mark_all_read(db: Session, user_id: int) -> int:
     notes = db.execute(
         select(Notification).where(

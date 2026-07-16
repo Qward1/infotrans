@@ -233,6 +233,18 @@ def api_notifications_read(
     return {"ok": True, "marked": count}
 
 
+@router.post("/notifications/{notification_id}/read")
+def api_notification_read_one(
+    notification_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_user),
+):
+    """Пометить одно уведомление прочитанным (FN-07)."""
+    if not notification_service.mark_read(db, user.id, notification_id):
+        raise HTTPException(status_code=404, detail="Уведомление не найдено")
+    return {"ok": True, "unread": notification_service.unread_count(db, user.id)}
+
+
 # --------------------------------------------------------------------------- #
 # Документы / протоколы                                                        #
 # --------------------------------------------------------------------------- #

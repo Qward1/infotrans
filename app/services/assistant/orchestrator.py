@@ -570,11 +570,19 @@ def _handle_create_event(settings, db, user, nr, result, now):
                 result.suggested_actions.insert(0, SuggestedAction(
                     type="confirm", label=f"Перенести «{lower.title}»", style="primary",
                     action_id=action.action_id))
+                # FN-04: у каждого черновика есть пара confirm/reject.
+                result.suggested_actions.insert(1, SuggestedAction(
+                    type="reject", label="Не переносить", style="ghost",
+                    action_id=action.action_id))
         elif resolve.recommended_action == conflict_resolver.ACTION_ASK_CONFIRMATION:
             action = create_action(db, user, ACTION_CREATE_EVENT,
                                    payload["title"], {**payload, "force": True})
             result.suggested_actions.insert(0, SuggestedAction(
                 type="confirm", label="Поставить несмотря на конфликт", style="danger",
+                action_id=action.action_id))
+            # FN-04: черновик можно корректно закрыть, а не бросать pending.
+            result.suggested_actions.insert(1, SuggestedAction(
+                type="reject", label="Не ставить", style="ghost",
                 action_id=action.action_id))
 
     if online_suggested:
@@ -703,12 +711,15 @@ def _handle_find_slots(settings, db, user, nr, result, now):
         return
     who = "у вас" if len(all_ids) <= 1 else f"у всех {len(all_ids)} участников"
     result.reply = f"Нашёл {len(slots)} свободных окон ({who}), длительность {duration} мин."
+    # UX-06: контекст диалога (тема/участники/формат) едет вместе со слотами,
+    # чтобы «Занять» открывал полностью заполненную форму.
+    prefill = {k: v for k, v in _prefill_from_nr(nr).items() if k not in {"start_at", "end_at"}}
     result.cards.append(AssistantCard(kind="alternative_slots", title="Свободные окна",
-                                       data={"slots": result.alternative_slots}))
+                                       data={"slots": result.alternative_slots, "prefill": prefill}))
     for s in slots[:3]:
         result.suggested_actions.append(SuggestedAction(
             type="create_event", label=f"Занять {s.start:%d.%m %H:%M}", style="ghost",
-            payload={"start_at": s.start.isoformat(timespec="minutes"),
+            payload={**prefill, "start_at": s.start.isoformat(timespec="minutes"),
                      "end_at": s.end.isoformat(timespec="minutes"), "source": "assistant"}))
 
 

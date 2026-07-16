@@ -27,6 +27,13 @@
           <input name="end_at" type="datetime-local" required />
         </div>
       </div>
+      <div class="duration-presets" aria-label="Быстрый выбор длительности">
+        <button type="button" class="btn small ghost" data-duration="30">30м</button>
+        <button type="button" class="btn small ghost" data-duration="45">45м</button>
+        <button type="button" class="btn small ghost" data-duration="60">1ч</button>
+        <button type="button" class="btn small ghost" data-duration="90">1.5ч</button>
+        <button type="button" class="btn small ghost" data-duration="120">2ч</button>
+      </div>
       <div class="form-row">
         <div class="field">
           <label>Формат</label>
@@ -49,9 +56,10 @@
         <label>Ссылка на встречу</label>
         <input name="meeting_url" placeholder="https://meet.example.com/..." />
       </div>
-      <div class="field">
+      <div class="field participants-field">
         <label>Участники</label>
-        <input name="participants" placeholder="email участников через запятую" />
+        <input name="participants" placeholder="имя или email — подсказки появятся при вводе" autocomplete="off" />
+        <div class="suggest-box" id="participants-suggest" style="display:none;"></div>
       </div>
       <div class="form-row">
         <div class="field">

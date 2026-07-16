@@ -71,9 +71,81 @@
   }
   window.toast = toast;
 
+  /* ----------------- Единый confirm-диалог (UX-13) ----------------- */
+  let confirmModal = null;
+  function uiConfirm(text, opts) {
+    opts = opts || {};
+    if (!confirmModal) {
+      confirmModal = document.createElement("div");
+      confirmModal.className = "modal-backdrop confirm-backdrop";
+      confirmModal.innerHTML =
+        '<div class="modal glass confirm-modal" role="dialog" aria-modal="true">' +
+        '<div class="confirm-icon">⚠️</div>' +
+        '<div class="confirm-text"></div>' +
+        '<div class="modal-foot">' +
+        '<button type="button" class="btn ghost" data-role="cancel">Отмена</button>' +
+        '<button type="button" class="btn primary" data-role="ok">Подтвердить</button>' +
+        "</div></div>";
+      document.body.appendChild(confirmModal);
+    }
+    const okBtn = confirmModal.querySelector("[data-role=ok]");
+    const cancelBtn = confirmModal.querySelector("[data-role=cancel]");
+    confirmModal.querySelector(".confirm-text").textContent = text || "Вы уверены?";
+    okBtn.className = "btn " + (opts.danger ? "danger" : "primary");
+    okBtn.textContent = opts.okLabel || (opts.danger ? "Удалить" : "Подтвердить");
+    confirmModal.classList.add("open");
+    okBtn.focus();
+    return new Promise((resolve) => {
+      const done = (result) => {
+        confirmModal.classList.remove("open");
+        okBtn.onclick = cancelBtn.onclick = confirmModal.onclick = null;
+        document.removeEventListener("keydown", onKey);
+        resolve(result);
+      };
+      const onKey = (e) => { if (e.key === "Escape") done(false); };
+      okBtn.onclick = () => done(true);
+      cancelBtn.onclick = () => done(false);
+      confirmModal.onclick = (e) => { if (e.target === confirmModal) done(false); };
+      document.addEventListener("keydown", onKey);
+    });
+  }
+  window.uiConfirm = uiConfirm;
+
+  /* -------------- Инлайн-ошибки форм в модалках (UX-12) -------------- */
+  function showFormError(form, message) {
+    if (!form) { toast(message, "err"); return; }
+    let box = form.querySelector(".form-error");
+    if (!box) {
+      box = document.createElement("div");
+      box.className = "alert error form-error";
+      const foot = form.querySelector(".modal-foot");
+      if (foot) form.insertBefore(box, foot);
+      else form.appendChild(box);
+    }
+    box.textContent = message;
+    box.style.display = "block";
+    box.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+  function clearFormError(form) {
+    const box = form && form.querySelector(".form-error");
+    if (box) box.style.display = "none";
+  }
+  window.showFormError = showFormError;
+
+  /* ------- Событие «данные календаря изменились» (BUG-10) ------- */
+  // Страница календаря перерисовывается без reload; остальные страницы
+  // (серверный рендер) откатываются на перезагрузку.
+  function emitEventChanged() {
+    window.dispatchEvent(new CustomEvent("smartcal:event-changed"));
+    if (!window.__smartcalCalendarLive) {
+      setTimeout(() => location.reload(), 400);
+    }
+  }
+
   /* --------------------------- API-хелпер --------------------------- */
-  async function api(method, url, body) {
+  async function api(method, url, body, signal) {
     const opts = { method, headers: {} };
+    if (signal) opts.signal = signal;
     if (body !== undefined) {
       opts.headers["Content-Type"] = "application/json";
       opts.body = JSON.stringify(body);
@@ -119,6 +191,7 @@
 
     function openEvent(data) {
       f.reset();
+      clearFormError(f);
       data = data || {};
       const editing = !!data.id;
       const readOnly = editing && !canEditEvent(data, editing);
@@ -173,8 +246,70 @@
     window.closeEventModal = () => eventModal.classList.remove("open");
     eventModal.addEventListener("click", (e) => { if (e.target === eventModal) eventModal.classList.remove("open"); });
 
+    // UX-04: «Окончание» следует за «Началом», сохраняя длительность.
+    const startInput = f.elements["start_at"];
+    const endInput = f.elements["end_at"];
+    let lastStartValue = "";
+    startInput.addEventListener("focus", () => { lastStartValue = startInput.value; });
+    startInput.addEventListener("change", () => {
+      const prev = lastStartValue ? new Date(lastStartValue) : null;
+      const next = startInput.value ? new Date(startInput.value) : null;
+      const end = endInput.value ? new Date(endInput.value) : null;
+      if (next && end) {
+        const durationMs = prev && end > prev ? end - prev : 3600000;
+        endInput.value = toLocalInput(new Date(next.getTime() + durationMs));
+      }
+      lastStartValue = startInput.value;
+    });
+    // Пресеты длительности «30м · 45м · 1ч …».
+    eventModal.querySelectorAll("[data-duration]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const minutes = parseInt(btn.getAttribute("data-duration"), 10);
+        const start = startInput.value ? new Date(startInput.value) : defaultStart();
+        if (!startInput.value) startInput.value = toLocalInput(start);
+        endInput.value = toLocalInput(new Date(start.getTime() + minutes * 60000));
+      });
+    });
+
+    // UX-05: автокомплит участников по справочнику сотрудников.
+    const participantsInput = f.elements["participants"];
+    const suggestBox = document.getElementById("participants-suggest");
+    let suggestTimer = null;
+    function hideSuggest() { if (suggestBox) { suggestBox.style.display = "none"; suggestBox.innerHTML = ""; } }
+    if (participantsInput && suggestBox) {
+      participantsInput.addEventListener("input", () => {
+        clearTimeout(suggestTimer);
+        const parts = participantsInput.value.split(",");
+        const term = parts[parts.length - 1].trim();
+        if (term.length < 2) { hideSuggest(); return; }
+        suggestTimer = setTimeout(async () => {
+          try {
+            const data = await api("GET", "/api/assistant/employees/search?q=" + encodeURIComponent(term));
+            const items = (data.items || []).filter((emp) => participantsInput.value.indexOf(emp.email) === -1);
+            if (!items.length) { hideSuggest(); return; }
+            suggestBox.innerHTML = items.slice(0, 6).map((emp) =>
+              `<button type="button" class="suggest-item" data-email="${emp.email}">` +
+              `<b>${emp.fullName || emp.email}</b> <span class="muted">${emp.email}</span></button>`
+            ).join("");
+            suggestBox.style.display = "block";
+            suggestBox.querySelectorAll(".suggest-item").forEach((item) => {
+              item.addEventListener("click", () => {
+                const before = participantsInput.value.split(",").slice(0, -1).map((x) => x.trim()).filter(Boolean);
+                before.push(item.getAttribute("data-email"));
+                participantsInput.value = before.join(", ") + ", ";
+                hideSuggest();
+                participantsInput.focus();
+              });
+            });
+          } catch (e) { hideSuggest(); }
+        }, 200);
+      });
+      participantsInput.addEventListener("blur", () => setTimeout(hideSuggest, 200));
+    }
+
     f.addEventListener("submit", async (e) => {
       e.preventDefault();
+      clearFormError(f);
       const id = f.elements["id"].value;
       const payload = {
         title: f.elements["title"].value.trim(),
@@ -204,20 +339,24 @@
           await api("POST", "/api/events", payload);
           toast("Встреча создана");
         }
-        setTimeout(() => location.reload(), 400);
+        eventModal.classList.remove("open");
+        emitEventChanged();
       } catch (err) {
-        toast(err.message, "err");
+        showFormError(f, err.message);
       }
     });
 
     deleteBtn.addEventListener("click", async () => {
       const id = f.elements["id"].value;
-      if (!id || !confirm("Удалить встречу?")) return;
+      if (!id) return;
+      const ok = await uiConfirm("Удалить встречу без возможности восстановления?", { danger: true });
+      if (!ok) return;
       try {
         await api("DELETE", `/api/events/${id}`);
         toast("Встреча удалена");
-        setTimeout(() => location.reload(), 400);
-      } catch (err) { toast(err.message, "err"); }
+        eventModal.classList.remove("open");
+        emitEventChanged();
+      } catch (err) { showFormError(f, err.message); }
     });
 
     function bindEventTriggers(root) {
@@ -352,11 +491,35 @@
       ).join("");
     }
 
+    // UX-01: границы рабочих часов из настроек (для затенения и автоскролла).
+    function workingHoursRange() {
+      const wh = calState.working_hours || {};
+      const parse = (s, dflt) => {
+        const m = /^(\d{1,2}):(\d{2})$/.exec(s || "");
+        return m ? parseInt(m[1], 10) + parseInt(m[2], 10) / 60 : dflt;
+      };
+      return [parse(wh.start, 9), parse(wh.end, 19)];
+    }
+
     function hourLines() {
-      return (calState.hours || []).map(() =>
-        `<div class="timegrid-line" style="height:${HOUR_HEIGHT}px;"></div>`
+      const range = workingHoursRange();
+      return (calState.hours || []).map((h) =>
+        `<div class="timegrid-line${h + 1 <= range[0] || h >= range[1] ? " off" : ""}" style="height:${HOUR_HEIGHT}px;"></div>`
       ).join("");
     }
+
+    // UX-01: красная линия текущего времени в колонке «сегодня».
+    function nowLineHtml(day) {
+      if (!day.is_today) return "";
+      const now = new Date();
+      const top = Math.round((now.getHours() * 60 + now.getMinutes()) * HOUR_HEIGHT / 60);
+      return `<div class="now-line" style="top:${top}px;"></div>`;
+    }
+    setInterval(() => {
+      const now = new Date();
+      const top = Math.round((now.getHours() * 60 + now.getMinutes()) * HOUR_HEIGHT / 60);
+      document.querySelectorAll(".now-line").forEach((el) => { el.style.top = top + "px"; });
+    }, 60000);
 
     function timedEvent(seg) {
       const e = seg.event;
@@ -393,8 +556,38 @@
         `<div class="timegrid-col ${day.is_today ? "today" : ""}" data-day="${day.date}">` +
         `<div class="timegrid-bg">${hourLines()}</div>${empty}` +
         segments.map(timedEvent).join("") +
+        nowLineHtml(day) +
         `</div>`
       );
+    }
+
+    // UX-03: клик по пустому месту колонки создаёт встречу на это время.
+    function bindGridCreate(root) {
+      root.querySelectorAll(".timegrid-col").forEach((col) => {
+        col.addEventListener("click", (e) => {
+          if (e.target.closest(".cal-event") || e.target.closest("button")) return;
+          const rect = col.getBoundingClientRect();
+          const minutes = Math.max(0, Math.min(1439, (e.clientY - rect.top + col.scrollTop) * 60 / HOUR_HEIGHT));
+          const rounded = Math.round(minutes / 30) * 30;
+          const hh = pad(Math.floor(rounded / 60) % 24);
+          const mm = pad(rounded % 60);
+          const start = new Date(`${col.getAttribute("data-day")}T${hh}:${mm}:00`);
+          const preset = {
+            start_at: toLocalInput(start),
+            end_at: toLocalInput(new Date(start.getTime() + 3600000)),
+          };
+          if (calState.owner) { preset.owner_id = calState.owner.id; preset.owner = calState.owner; }
+          if (window.openEventModal) window.openEventModal(preset);
+        });
+      });
+    }
+
+    // UX-01: автоскролл сетки к началу рабочего дня (минус час).
+    function scrollToWorkHours() {
+      const grid = calendarBody.querySelector(".calendar-timegrid");
+      if (!grid) return;
+      const start = Math.max(0, workingHoursRange()[0] - 1);
+      grid.scrollTop = Math.round(start * HOUR_HEIGHT);
     }
 
     function renderDay() {
@@ -433,10 +626,14 @@
       const cells = (calState.days || []).map((day) => {
         const evs = eventsForDay(day.date);
         const shown = evs.slice(0, 4).map(compactEvent).join("");
-        const more = evs.length > 4 ? `<div class="month-more">+${evs.length - 4} ещё</div>` : "";
+        // UX-02: «+N ещё» открывает день, а не остаётся мёртвым текстом.
+        const more = evs.length > 4
+          ? `<button class="month-more" data-goto-day="${day.date}">+${evs.length - 4} ещё</button>`
+          : "";
         return (
           `<div class="month-cell ${day.is_today ? "today" : ""} ${day.is_current_month ? "" : "outside"}">` +
-          `<div class="month-cell-head"><span>${dateAtNoon(day.date).getDate()}</span>` +
+          `<div class="month-cell-head">` +
+          `<button class="month-day-num" data-goto-day="${day.date}" title="Открыть день">${dateAtNoon(day.date).getDate()}</button>` +
           `<button class="day-add" data-new-event data-day="${day.date}">＋</button></div>` +
           (evs.length ? shown + more : `<div class="cal-empty">нет встреч</div>`) +
           `</div>`
@@ -466,9 +663,26 @@
       else if (calState.view === "month") calendarBody.innerHTML = renderMonth();
       else calendarBody.innerHTML = renderWeek();
       if (window.bindEventModalTriggers) window.bindEventModalTriggers(calendarBody);
+      // UX-02: переход к дню по «+N ещё» / числу дня в месяце.
+      calendarBody.querySelectorAll("[data-goto-day]").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          loadCalendar("day", btn.getAttribute("data-goto-day"), true);
+        });
+      });
+      if (calState.view !== "month") {
+        bindGridCreate(calendarBody);
+        scrollToWorkHours();
+      }
     }
 
+    // BUG-20: быстрая навигация не должна рисовать устаревший ответ.
+    let calAbort = null;
+
     async function loadCalendar(view, date, push, userId) {
+      if (calAbort) calAbort.abort();
+      calAbort = new AbortController();
+      const signal = calAbort.signal;
       calendarBody.innerHTML = loadingCal("Обновляю календарь…");
       const params = new URLSearchParams({ view, date });
       const selectedUserId = userId !== undefined
@@ -478,15 +692,30 @@
         params.set("user_id", selectedUserId);
       }
       try {
-        calState = await window.api("GET", "/api/calendar/range?" + params.toString());
+        calState = await window.api("GET", "/api/calendar/range?" + params.toString(), undefined, signal);
         localStorage.setItem(VIEW_KEY, calState.view);
         renderCalendar();
         if (push !== false) {
           history.pushState({ calendar: true, view: calState.view, date: calState.date }, "", `${BASE}/calendar?${params.toString()}`);
         }
       } catch (e) {
+        if (e.name === "AbortError") return; // пришёл более свежий запрос
         calendarBody.innerHTML = `<div class="alert error">${escCal(e.message)}</div>`;
       }
+    }
+
+    // BUG-10: календарь перерисовывается без перезагрузки страницы.
+    window.__smartcalCalendarLive = true;
+    window.addEventListener("smartcal:event-changed", () => {
+      loadCalendar(calState.view, calState.date, false);
+    });
+
+    // UX-09: переход к произвольной дате.
+    const gotoInput = document.getElementById("calendar-goto");
+    if (gotoInput) {
+      gotoInput.addEventListener("change", () => {
+        if (gotoInput.value) loadCalendar(calState.view, gotoInput.value, true);
+      });
     }
 
     viewButtons.forEach((btn) => {
@@ -607,6 +836,8 @@
       if (form) {
         form.querySelectorAll("input, button").forEach((el) => { el.disabled = readonly; });
       }
+      // UX-18: в чужом чате плейсхолдер объясняет режим «только чтение».
+      if (input) input.placeholder = readonly ? "Просмотр чата сотрудника (только чтение)" : "Напишите сообщение…";
       newChatButtons.forEach((btn) => { btn.disabled = readonly; });
     }
 
@@ -670,14 +901,17 @@
       );
     }
 
-    function slotsHtml(slots) {
+    function slotsHtml(slots, prefill) {
+      // UX-06: контекст диалога (тема/участники/формат) едет в модалку вместе со слотом.
+      const base = prefill || {};
       return slots.map((s, i) => {
         const w = (s.warnings || []).length ? `<div class="a-warn">⚠️ ${esc(s.warnings.join("; "))}</div>` : "";
+        const payload = Object.assign({}, base, { start_at: s.start_at, end_at: s.end_at, source: "assistant" });
         return (
           `<div class="a-slot">` +
           `<div><b>${fmtDT(s.start_at)}–${fmtT(s.end_at)}</b> · ${s.duration_minutes} мин` +
           (s.reason ? `<div class="a-muted">${esc(s.reason)}</div>` : "") + w + `</div>` +
-          `<button class="btn small ghost" data-slot='${esc(JSON.stringify({start_at: s.start_at, end_at: s.end_at, source: "assistant"}))}'>Взять</button>` +
+          `<button class="btn small ghost" data-slot='${esc(JSON.stringify(payload))}'>Взять</button>` +
           `</div>`
         );
       }).join("");
@@ -760,7 +994,7 @@
       el.className = "a-card";
       const d = card.data || {};
       if (card.kind === "created_event") el.innerHTML = eventCardHtml(d);
-      else if (card.kind === "alternative_slots") el.innerHTML = `<div class="a-card-title">🟢 ${esc(card.title)}</div>` + slotsHtml(d.slots || []);
+      else if (card.kind === "alternative_slots") el.innerHTML = `<div class="a-card-title">🟢 ${esc(card.title)}</div>` + slotsHtml(d.slots || [], d.prefill);
       else if (card.kind === "travel_options") el.innerHTML = `<div class="a-card-title">🎫 ${esc(card.title)}</div>` + ticketsHtml(d.options || []);
       else if (card.kind === "travel_sources") el.innerHTML = `<div class="a-card-title">🔎 ${esc(card.title)}</div>` + travelSourcesHtml(d.sources || []);
       else if (card.kind === "protocol") el.innerHTML = protocolHtml(d);
@@ -784,16 +1018,34 @@
       return el;
     }
 
-    function renderActions(actions, container) {
+    // BUG-09: кнопки восстановленной истории знают актуальный статус действия.
+    const ACTION_DONE_LABEL = {
+      confirmed: "✓ выполнено",
+      in_progress: "выполняется…",
+      rejected: "отклонено",
+      expired: "истекло",
+    };
+
+    function renderActions(actions, container, actionsState) {
       const wrap = document.createElement("div");
       wrap.className = "msg-actions";
+      const states = actionsState || {};
       actions.forEach((a) => {
         const b = document.createElement("button");
         const style = a.style === "danger" ? "danger" : a.style === "primary" ? "primary" : "ghost";
         b.className = "btn small " + style;
         b.textContent = a.label;
-        b.disabled = isViewingForeignChat();
-        b.addEventListener("click", () => runAction(a, b, container));
+        const state = a.action_id ? states[a.action_id] : null;
+        if (state && state !== "pending") {
+          b.disabled = true;
+          b.classList.add("ghost");
+          b.classList.remove("primary", "danger");
+          if (a.type === "confirm") b.textContent = ACTION_DONE_LABEL[state] || state;
+          else b.textContent = a.label;
+        } else {
+          b.disabled = isViewingForeignChat();
+          b.addEventListener("click", () => runAction(a, b, container));
+        }
         wrap.appendChild(b);
       });
       if (actions.length) container.appendChild(wrap);
@@ -832,6 +1084,23 @@
       }
     }
 
+    // UX-07: маленький бейдж статуса/режима в сообщении бота.
+    const STATUS_BADGES = {
+      needs_confirmation: ["wait", "ждёт подтверждения"],
+      needs_clarification: ["wait", "нужны уточнения"],
+      conflict: ["conflict", "конфликт"],
+      done: ["done", "выполнено"],
+      error: ["conflict", "ошибка"],
+    };
+
+    function statusBadgeHtml(data) {
+      const parts = [];
+      const st = STATUS_BADGES[data.status];
+      if (st) parts.push(`<span class="msg-badge ${st[0]}"><span class="dot-i"></span>${st[1]}</span>`);
+      if (data.mode === "dify-fallback") parts.push('<span class="msg-badge mode" title="Внешний ассистент недоступен — работает локальный разбор">локальный режим</span>');
+      return parts.length ? `<div class="msg-badges">${parts.join("")}</div>` : "";
+    }
+
     function renderResult(data) {
       const el = document.createElement("div");
       el.className = "msg bot";
@@ -845,7 +1114,11 @@
         el.appendChild(wr);
       });
       (data.cards || []).forEach((c) => el.appendChild(renderCard(c)));
-      if (data.suggested_actions && data.suggested_actions.length) renderActions(data.suggested_actions, el);
+      if (data.suggested_actions && data.suggested_actions.length) {
+        renderActions(data.suggested_actions, el, data.actions_state);
+      }
+      const badges = statusBadgeHtml(data);
+      if (badges) el.insertAdjacentHTML("beforeend", badges);
       chatLog.appendChild(el);
       chatLog.scrollTop = chatLog.scrollHeight;
       return el;
@@ -999,7 +1272,9 @@
         toast("Чужая история доступна только для просмотра", "err");
         return;
       }
-      if (!chatId || !confirm("Удалить этот чат?")) return;
+      if (!chatId) return;
+      const ok = await uiConfirm("Удалить этот чат вместе с историей сообщений?", { danger: true });
+      if (!ok) return;
       setSaveState("Удаление чата…");
       try {
         await api("DELETE", `/api/assistant/chats/${chatId}`);
@@ -1098,8 +1373,11 @@
         setSaveState("Сохранение документа…");
         try {
           const res = await fetch(BASE + "/chat/upload", { method: "POST", body: fd });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.detail || res.statusText);
+          // BUG-27: не-JSON ответ (500 HTML) не должен ронять чат.
+          let data = null;
+          try { data = await res.json(); } catch (parseErr) { data = null; }
+          if (!res.ok) throw new Error((data && data.detail) || res.statusText);
+          if (!data) throw new Error("Некорректный ответ сервера");
           activeChatId = data.conversation_id || activeChatId;
           typing.remove();
           renderResult(data);
@@ -1141,6 +1419,7 @@
     applyHistoryCollapsed(localStorage.getItem(CHAT_HISTORY_COLLAPSED_KEY) === "1");
     applySideCollapsed(localStorage.getItem(CHAT_SIDE_COLLAPSED_KEY) === "1");
     loadHistory(true);
+    if (input && !isViewingForeignChat()) input.focus(); // UX-18
   }
 
   /* =====================================================================
@@ -1281,6 +1560,18 @@
       protoEmpty.style.display = "none";
       protoBody.style.display = "block";
       protoBody.innerHTML = spinner("Формирую протокол…");
+      // UX-17: на мобиле панель протокола ниже списка — показываем прогресс.
+      protoBody.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+
+    // UX-17: показать имя выбранного файла в дропзоне до окончания загрузки.
+    function showPickedFile(name) {
+      const title = docDropzone.querySelector(".dz-title");
+      if (title) title.textContent = "Загружаю: " + name;
+    }
+    function resetDropzone() {
+      const title = docDropzone.querySelector(".dz-title");
+      if (title) title.textContent = "Перетащите файл сюда или нажмите";
     }
 
     function renderProtocol(data) {
@@ -1348,18 +1639,25 @@
 
     async function uploadFile(file) {
       showLoading();
+      showPickedFile(file.name);
       const fd = new FormData();
       fd.append("file", file);
       try {
         const res = await fetch(BASE + "/chat/upload", { method: "POST", body: fd });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || "Ошибка загрузки");
+        // BUG-27: сервер мог ответить не-JSON (например, 500 HTML).
+        let data = null;
+        try { data = await res.json(); } catch (parseErr) { data = null; }
+        if (!res.ok) throw new Error((data && data.detail) || res.statusText || "Ошибка загрузки");
+        if (!data) throw new Error("Некорректный ответ сервера");
         renderProtocol(data);
         if (data.document_id) prependDoc(data.document_id, data.filename || file.name);
         window.toast("Документ загружен, протокол готов");
+        protoBody.scrollIntoView({ behavior: "smooth", block: "start" });
       } catch (e) {
         protoBody.innerHTML = `<div class="alert error">Не удалось обработать файл: ${escHtml(e.message)}</div>`;
         window.toast(e.message, "err");
+      } finally {
+        resetDropzone();
       }
     }
 
@@ -1406,13 +1704,45 @@
       return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
     };
 
+    // UX-16: быстрые маршруты сразу запускают поиск.
     document.querySelectorAll("[data-route]").forEach((b) => {
       b.addEventListener("click", () => {
         const [from, to] = b.getAttribute("data-route").split("|");
         travelForm.elements["origin"].value = from;
         travelForm.elements["destination"].value = to;
+        travelForm.requestSubmit();
       });
     });
+
+    // UX-16: «⇄» меняет города местами.
+    const swapBtn = document.getElementById("travel-swap");
+    if (swapBtn) {
+      swapBtn.addEventListener("click", () => {
+        const o = travelForm.elements["origin"], d = travelForm.elements["destination"];
+        const tmp = o.value; o.value = d.value; d.value = tmp;
+      });
+    }
+
+    // UX-16: min-атрибуты на датах (не в прошлое; обратно не раньше «туда»).
+    const dateInput = travelForm.elements["date"];
+    const returnInput = travelForm.elements["return_date"];
+    if (dateInput) {
+      dateInput.min = todayIso();
+      const syncReturnMin = () => { if (returnInput) returnInput.min = dateInput.value || todayIso(); };
+      dateInput.addEventListener("change", syncReturnMin);
+      syncReturnMin();
+    }
+
+    // UX-16: запоминаем последний маршрут.
+    const ROUTE_KEY = "smartcal-travel-route";
+    try {
+      const saved = JSON.parse(localStorage.getItem(ROUTE_KEY) || "null");
+      if (saved && saved.origin) {
+        travelForm.elements["origin"].value = saved.origin;
+        travelForm.elements["destination"].value = saved.destination || "";
+        if (saved.transport) travelForm.elements["transport"].value = saved.transport;
+      }
+    } catch (e) { /* повреждённый localStorage — игнорируем */ }
 
     function showTravelError(message) {
       countEl.textContent = "";
@@ -1479,6 +1809,12 @@
       if (date < todayIso()) return showTravelError("Дата отправления не может быть в прошлом.");
       if (returnDate && returnDate < date) return showTravelError("Дата возвращения не может быть раньше даты отправления.");
       if (!passengers || passengers < 1 || passengers > 9) return showTravelError("Количество пассажиров должно быть от 1 до 9.");
+
+      try {
+        localStorage.setItem("smartcal-travel-route", JSON.stringify({
+          origin, destination, transport: f["transport"].value,
+        }));
+      } catch (e) { /* quota — не критично */ }
 
       const budget = parseFloat(f["budget"].value);
       const prefs = Array.from(travelForm.querySelectorAll("input[name=pref]:checked")).map((c) => c.value);

@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Уведомления · {{ app_name }}{% endblock %}
 {% block page_title %}Уведомления{% endblock %}
-{% block page_subtitle %}Все каналы · непрочитанных: {{ unread }}{% endblock %}
+{% block page_subtitle %}Все каналы · непрочитанных: <span id="notif-unread-count">{{ unread }}</span>{% endblock %}
 
 {% block topbar_actions %}
 {% if items %}<button class="btn ghost" id="notif-read-all">Отметить все прочитанными</button>{% endif %}
@@ -24,8 +24,9 @@
       <tbody>
         {% for it in items %}
         {% set n = it.note %}
-        <tr class="{{ 'notif-unread-row' if n.status != 'read' }}">
-          <td>
+        <tr class="notif-row {{ 'notif-unread-row' if n.status != 'read' }}" data-notif-id="{{ n.id }}"
+            {% if n.status != 'read' %}title="Нажмите, чтобы отметить прочитанным"{% endif %}>
+          <td class="notif-status-cell">
             {% if n.status == 'read' %}<span class="badge badge-user">прочитано</span>
             {% else %}<span class="badge prio-high">новое</span>{% endif %}
           </td>
@@ -40,7 +41,8 @@
           </td>
           <td>
             {% if it.related %}
-              <a href="{{ base }}/calendar">{{ it.related.title }}</a>
+              {# UX-11: deep-link сразу на день встречи #}
+              <a href="{{ base }}/calendar?view=day&date={{ it.related.start_at.strftime('%Y-%m-%d') }}">{{ it.related.title }}</a>
               <div class="muted" style="font-size:12px;">{{ it.related.start_at.strftime('%d.%m %H:%M') }}</div>
             {% else %}<span class="muted">—</span>{% endif %}
           </td>
@@ -63,12 +65,41 @@
 {% block extra_js %}
 <script>
   document.addEventListener("DOMContentLoaded", function () {
+    var unreadEl = document.getElementById("notif-unread-count");
+
+    function markRowRead(row) {
+      row.classList.remove("notif-unread-row");
+      row.removeAttribute("title");
+      var cell = row.querySelector(".notif-status-cell");
+      if (cell) cell.innerHTML = '<span class="badge badge-user">прочитано</span>';
+    }
+
+    function setUnread(value) {
+      if (unreadEl) unreadEl.textContent = value;
+      if (window.refreshNotifications) window.refreshNotifications();
+    }
+
+    // FN-07: клик по непрочитанной строке помечает её прочитанной (без reload).
+    document.querySelectorAll(".notif-row").forEach(function (row) {
+      row.addEventListener("click", async function (e) {
+        if (e.target.closest("a")) return; // клик по ссылке на встречу — переход
+        if (!row.classList.contains("notif-unread-row")) return;
+        try {
+          var res = await window.api("POST", "/api/notifications/" + row.getAttribute("data-notif-id") + "/read", {});
+          markRowRead(row);
+          setUnread(res.unread);
+        } catch (err) { window.toast(err.message, "err"); }
+      });
+    });
+
+    // BUG-28: «прочитать все» обновляет строки и счётчик без перезагрузки.
     var btn = document.getElementById("notif-read-all");
     if (btn) btn.addEventListener("click", async function () {
       try {
         await window.api("POST", "/api/notifications/read", {});
+        document.querySelectorAll(".notif-row").forEach(markRowRead);
+        setUnread(0);
         window.toast("Все уведомления отмечены прочитанными");
-        setTimeout(function () { location.reload(); }, 400);
       } catch (e) { window.toast(e.message, "err"); }
     });
   });

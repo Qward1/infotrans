@@ -57,6 +57,9 @@
 
   <div class="cal-range" id="calendar-range">{{ calendar_payload.label }}</div>
 
+  <input type="date" id="calendar-goto" class="cal-goto" value="{{ calendar_payload.date }}"
+         title="Перейти к дате" aria-label="Перейти к дате" />
+
   <div class="view-switch" role="group" aria-label="Вид календаря">
     <button type="button" class="btn small {{ 'primary' if calendar_payload.view == 'day' else 'ghost' }}" data-cal-view="day">День</button>
     <button type="button" class="btn small {{ 'primary' if calendar_payload.view == 'week' else 'ghost' }}" data-cal-view="week">Неделя</button>

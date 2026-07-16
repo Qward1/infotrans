@@ -7,10 +7,11 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, object_session, selectinload
 
 from app.models.assistant import (
     CHAT_ROLES,
+    AssistantAction,
     AssistantChat,
     AssistantChatMessage,
 )
@@ -178,6 +179,27 @@ def serialize_message(message: AssistantChatMessage, *, viewer: User | None = No
     }
 
 
+def _action_states(db: Session, serialized_messages: list[dict[str, Any]]) -> dict[str, str]:
+    """Актуальные статусы действий, упомянутых в сообщениях (BUG-09).
+
+    История хранит snapshot ответа с кнопками confirm/reject; статус действия
+    с тех пор мог измениться — собираем свежие статусы одним запросом."""
+    action_ids: set[str] = set()
+    for message in serialized_messages:
+        payload = message.get("payload") or {}
+        for action in payload.get("suggested_actions") or []:
+            if isinstance(action, dict) and action.get("action_id"):
+                action_ids.add(action["action_id"])
+    if not action_ids:
+        return {}
+    rows = db.execute(
+        select(AssistantAction.action_id, AssistantAction.status).where(
+            AssistantAction.action_id.in_(action_ids)
+        )
+    ).all()
+    return {action_id: status for action_id, status in rows}
+
+
 def serialize_chat(
     chat: AssistantChat,
     *,
@@ -196,5 +218,12 @@ def serialize_chat(
         messages = sorted(chat.messages, key=lambda message: (message.created_at, message.id or 0))
         if viewer is not None and not viewer.is_admin:
             messages = [message for message in messages if message.role in PUBLIC_MESSAGE_ROLES]
-        payload["messages"] = [serialize_message(message, viewer=viewer) for message in messages]
+        serialized = [serialize_message(message, viewer=viewer) for message in messages]
+        db = object_session(chat)
+        states = _action_states(db, serialized) if db is not None else {}
+        if states:
+            for message in serialized:
+                if message.get("payload"):
+                    message["payload"]["actions_state"] = states
+        payload["messages"] = serialized
     return payload

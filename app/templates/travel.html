@@ -9,11 +9,13 @@
     <section class="panel glass" style="margin-bottom:18px;">
       <div class="panel-head"><h2>Параметры поездки</h2></div>
       <form id="travel-form">
-        <div class="form-row">
+        <div class="form-row route-row">
           <div class="field">
             <label>Откуда</label>
             <input name="origin" required placeholder="Москва" value="Москва" />
           </div>
+          <button type="button" class="btn icon ghost route-swap" id="travel-swap"
+                  title="Поменять города местами" aria-label="Поменять города местами">⇄</button>
           <div class="field">
             <label>Куда</label>
             <input name="destination" required placeholder="Санкт-Петербург" value="Санкт-Петербург" />

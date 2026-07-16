@@ -11,6 +11,7 @@ from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.permissions import require_user
 from app.models.user import User
+from app.services import availability
 from app.services import calendar as calendar_service
 from app.services import scheduling as scheduling_service
 from app.services import users as users_service
@@ -100,7 +101,9 @@ def calendar_payload(
     view = calendar_service.normalize_view(view)
     period_start, period_end = calendar_service.period_bounds(view, ref)
     range_start, range_end, events = calendar_service.list_period(db, owner.id, view, ref)
-    today = _now(settings.app.timezone).date()
+    now_local = _now(settings.app.timezone)
+    today = now_local.date()
+    work_start, work_end = availability.parse_working_hours(settings)
 
     conflict_ids: set[int] = set()
     for c in scheduling_service.conflicts_for_user(db, owner.id, range_start, range_end):
@@ -184,6 +187,11 @@ def calendar_payload(
         "range_start": range_start.date().isoformat(),
         "range_end": (range_end - timedelta(days=1)).date().isoformat(),
         "today": today.isoformat(),
+        "now": now_local.strftime("%Y-%m-%dT%H:%M"),
+        "working_hours": {
+            "start": work_start.strftime("%H:%M"),
+            "end": work_end.strftime("%H:%M"),
+        },
         "prev_date": prev_date,
         "next_date": next_date,
         "days": days,

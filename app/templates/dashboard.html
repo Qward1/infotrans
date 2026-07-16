@@ -97,7 +97,9 @@
       <div class="panel-head"><h2>Конфликты расписания</h2></div>
       {% if conflicts %}
         {% for c in conflicts %}
-        <div class="event-row">
+        {# UX-19: клик открывает день конфликтующей встречи в календаре #}
+        <a class="event-row conflict-link" href="{{ base }}/calendar?view=day&date={{ c.drop.start.strftime('%Y-%m-%d') }}"
+           title="Открыть день в календаре">
           <div class="prio" style="background:rgba(224,71,91,0.15); color:var(--danger);">!</div>
           <div class="body">
             <div class="title">{{ c.drop.title }}</div>
@@ -107,7 +109,7 @@
             </div>
           </div>
           <span class="badge conflict-flag">конфликт</span>
-        </div>
+        </a>
         {% endfor %}
       {% else %}
         <p class="muted mb-0">Пересечений не найдено. Расписание в порядке 👍</p>

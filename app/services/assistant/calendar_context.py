@@ -135,7 +135,12 @@ def search_employees(
     limit: int = 10,
     include_inaccessible: bool = False,
 ) -> list[User]:
-    """Найти сотрудников, соблюдая область видимости текущего пользователя."""
+    """Найти сотрудников по имени/email.
+
+    Справочник команды (id/имя/email) доступен всем авторизованным — он нужен
+    для приглашения участников (UX-05). Доступ к чужому КАЛЕНДАРЮ по-прежнему
+    проверяется отдельно (``resolve_employee_query``/``employee_availability``).
+    """
     source = users_service.list_active_users(db)
     scored: list[tuple[int, User]] = []
     for user in source:
@@ -143,10 +148,7 @@ def search_employees(
         if score > 0:
             scored.append((score, user))
     scored.sort(key=lambda item: (-item[0], item[1].full_name or item[1].email))
-    matches = [user for _, user in scored]
-    if actor.is_admin or include_inaccessible:
-        return matches[:limit]
-    return [user for user in matches if user.id == actor.id][:limit]
+    return [user for _, user in scored][:limit]
 
 
 def resolve_employee_query(db: Session, settings: Settings, actor: User, query: str) -> User:

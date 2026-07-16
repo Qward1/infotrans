@@ -71,7 +71,11 @@
       b.addEventListener("click", async function () {
         var id = b.getAttribute("data-toggle-active");
         var to = b.getAttribute("data-to") === "true";
-        if (!confirm(to ? "Включить пользователя?" : "Отключить пользователя?")) return;
+        var ok = await window.uiConfirm(
+          to ? "Включить пользователя? Он снова сможет входить в систему." : "Отключить пользователя? Вход будет заблокирован.",
+          { danger: !to, okLabel: to ? "Включить" : "Отключить" }
+        );
+        if (!ok) return;
         b.disabled = true;
         try {
           await window.api("PATCH", "/api/admin/users/" + id, { is_active: to });
