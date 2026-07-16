@@ -65,6 +65,11 @@ def _merge(intervals: list[BusyInterval]) -> list[tuple[datetime, datetime]]:
     return merged
 
 
+def merge_events_busy(events: list[CalendarEvent]) -> list[tuple[datetime, datetime]]:
+    """Слить события в непрерывные занятые отрезки (ARCH-03: единая реализация)."""
+    return _merge(_events_to_busy(events))
+
+
 def find_free_slots(
     busy: list[BusyInterval],
     range_start: datetime,

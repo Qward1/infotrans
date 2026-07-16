@@ -11,6 +11,7 @@ from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.permissions import require_user
 from app.models.user import User
+from app.schemas.calendar import serialize_event
 from app.services import availability
 from app.services import calendar as calendar_service
 from app.services import scheduling as scheduling_service
@@ -125,46 +126,14 @@ def calendar_payload(
         current += timedelta(days=1)
 
     def event_out(e):
-        participants = [
-            {
-                "user_id": p.user_id,
-                "full_name": p.user.full_name or p.user.email,
-                "email": p.user.email,
-            }
-            for p in e.participants
-        ]
-        event_owner = e.owner
-        owner_name = (
-            (event_owner.full_name or event_owner.email)
-            if event_owner
-            else (owner.full_name or owner.email)
+        # ARCH-04: единая сериализация события (schemas/calendar.serialize_event).
+        return serialize_event(
+            e,
+            include_participants=True,
+            conflict_ids=conflict_ids,
+            calendar_owner=owner,
+            viewer=user,
         )
-        return {
-            "id": e.id,
-            "title": e.title,
-            "description": e.description,
-            "start_at": e.start_at.isoformat(),
-            "end_at": e.end_at.isoformat(),
-            "timezone": e.timezone,
-            "location_type": e.location_type,
-            "city": e.city,
-            "address": e.address,
-            "meeting_url": e.meeting_url,
-            "importance": e.importance,
-            "priority": e.priority,
-            "owner_id": e.owner_id,
-            "owner_name": owner_name,
-            "created_by_id": e.created_by_id,
-            "updated_by_id": e.updated_by_id,
-            "participants": participants,
-            "status": e.status,
-            "source": e.source,
-            "is_conflict": e.id in conflict_ids,
-            # Владелец календаря приглашён на чужую встречу (BUG-01/FN-01).
-            "is_participant": e.owner_id != owner.id,
-            # Редактировать/удалять может только владелец события или админ.
-            "can_edit": user.is_admin or e.owner_id == user.id,
-        }
 
     prev_date = _add_period(view, period_start, -1).date().isoformat()
     next_date = _add_period(view, period_start, 1).date().isoformat()

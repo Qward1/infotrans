@@ -11,9 +11,8 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings
 from app.models.calendar import CalendarEvent
 from app.models.user import User
-from app.services import availability
+from app.services import availability, scheduling
 from app.services import users as users_service
-from app.services.scheduling import BusyInterval
 
 
 class CalendarContextError(Exception):
@@ -260,18 +259,8 @@ def parse_api_range(
     return infer_date_range("неделя", settings)
 
 
-def _merge_busy(events: list[CalendarEvent]) -> list[tuple[datetime, datetime]]:
-    intervals = sorted(
-        [BusyInterval(start=e.start_at, end=e.end_at, priority=e.priority, title=e.title, event_id=e.id) for e in events],
-        key=lambda item: item.start,
-    )
-    merged: list[tuple[datetime, datetime]] = []
-    for item in intervals:
-        if not merged or item.start > merged[-1][1]:
-            merged.append((item.start, item.end))
-        else:
-            merged[-1] = (merged[-1][0], max(merged[-1][1], item.end))
-    return merged
+# ARCH-03: единая реализация слияния интервалов живёт в scheduling.
+_merge_busy = scheduling.merge_events_busy
 
 
 def employee_availability(

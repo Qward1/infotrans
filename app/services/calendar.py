@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.models.calendar import CalendarEvent, STATUS_CANCELLED
 from app.models.meeting import EventParticipant
 from app.schemas.calendar import EventCreate, EventUpdate
-from app.services import users as users_service
+from app.services import participants as participants_service
 
 CALENDAR_VIEWS = ("day", "week", "month")
 
@@ -18,37 +18,13 @@ def get_event(db: Session, event_id: int) -> CalendarEvent | None:
     return db.get(CalendarEvent, event_id)
 
 
-def _resolve_participant_ids(db: Session, participants: list[str], owner_id: int) -> list[int]:
-    ids: list[int] = []
-    unresolved: list[str] = []
-    for raw in participants or []:
-        value = str(raw or "").strip()
-        if not value:
-            continue
-        user = None
-        if value.isdigit():
-            user = users_service.get_by_id(db, int(value))
-        if user is None and "@" in value:
-            user = users_service.get_by_email(db, value)
-        if user is None:
-            matches = [
-                u for u in users_service.search_users(db, value, active_only=True, limit=5)
-                if (u.full_name or "").strip().lower() == value.lower()
-            ]
-            user = matches[0] if len(matches) == 1 else None
-        if user is None or not user.is_active:
-            unresolved.append(value)
-            continue
-        if user.id != owner_id and user.id not in ids:
-            ids.append(user.id)
+def _set_participants(db: Session, event: CalendarEvent, participants: list[str]) -> None:
+    # ARCH-02: единый резолв участников; API-путь строг — нерезолвленные = ошибка.
+    ids, unresolved = participants_service.resolve(db, participants, owner_id=event.owner_id)
     if unresolved:
         raise ValueError("Не найдены участники: " + ", ".join(unresolved))
-    return ids
-
-
-def _set_participants(db: Session, event: CalendarEvent, participants: list[str]) -> None:
     db.query(EventParticipant).filter(EventParticipant.event_id == event.id).delete()
-    for user_id in _resolve_participant_ids(db, participants, event.owner_id):
+    for user_id in ids:
         db.add(EventParticipant(event_id=event.id, user_id=user_id, role="attendee"))
 
 

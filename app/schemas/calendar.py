@@ -95,6 +95,60 @@ class EventUpdate(BaseModel):
         return v
 
 
+def serialize_event(
+    event,
+    *,
+    include_participants: bool = False,
+    conflict_ids: frozenset | set = frozenset(),
+    calendar_owner=None,
+    viewer=None,
+) -> dict:
+    """Единая сериализация события в dict (ARCH-04).
+
+    Базовый словарь используют чат-карточки ассистента; расширенный
+    (``include_participants=True``) — календарный payload: участники, имя
+    владельца, флаги конфликтов/приглашения/прав.
+    """
+    data = {
+        "id": event.id,
+        "title": event.title,
+        "description": event.description,
+        "start_at": event.start_at.isoformat(),
+        "end_at": event.end_at.isoformat(),
+        "timezone": event.timezone,
+        "location_type": event.location_type,
+        "city": event.city,
+        "address": event.address,
+        "meeting_url": event.meeting_url,
+        "importance": event.importance,
+        "priority": event.priority,
+        "status": event.status,
+        "source": event.source,
+        "owner_id": event.owner_id,
+    }
+    if include_participants:
+        owner_obj = event.owner
+        data["owner_name"] = (owner_obj.full_name or owner_obj.email) if owner_obj else ""
+        data["created_by_id"] = event.created_by_id
+        data["updated_by_id"] = event.updated_by_id
+        data["participants"] = [
+            {
+                "user_id": p.user_id,
+                "full_name": p.user.full_name or p.user.email,
+                "email": p.user.email,
+            }
+            for p in event.participants
+        ]
+        data["is_conflict"] = event.id in conflict_ids
+        if calendar_owner is not None:
+            # Владелец календаря приглашён на чужую встречу (BUG-01/FN-01).
+            data["is_participant"] = event.owner_id != calendar_owner.id
+        if viewer is not None:
+            # Редактировать/удалять может только владелец события или админ.
+            data["can_edit"] = viewer.is_admin or event.owner_id == viewer.id
+    return data
+
+
 class EventOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
