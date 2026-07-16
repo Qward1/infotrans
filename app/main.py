@@ -12,6 +12,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.bootstrap import bootstrap
@@ -108,16 +109,37 @@ async def _not_authorized(request: Request, exc: NotAuthorized):
     return render(request, "403.html", active="", status_code=403)
 
 
+@app.exception_handler(StarletteHTTPException)
+async def _http_exception(request: Request, exc: StarletteHTTPException):
+    """BUG-29: человеческая страница 404 вместо JSON в браузере (для не-/api путей)."""
+    if exc.status_code == 404 and not request.url.path.startswith("/api"):
+        return render(request, "404.html", active="", status_code=404)
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+        headers=getattr(exc, "headers", None),
+    )
+
+
+@app.exception_handler(Exception)
+async def _server_error(request: Request, exc: Exception):
+    """BUG-29: страница «что-то пошло не так» вместо голого 500 (для не-/api путей)."""
+    if request.url.path.startswith("/api"):
+        return JSONResponse(status_code=500, content={"detail": "Внутренняя ошибка сервера"})
+    return render(request, "500.html", active="", status_code=500)
+
+
 @app.exception_handler(ValueError)
 async def _value_error(request: Request, exc: ValueError):
     """ARCH-09: сервисы бросают ValueError с человекочитаемым текстом.
 
     Для /api-путей — единый 400 JSON (без дублей try/except по роутерам);
-    для страниц не перехватываем (обычный 500, чтобы не маскировать баги).
+    для страниц — страница 500 (re-raise из хендлера не каскадируется в Starlette).
     """
     if request.url.path.startswith("/api"):
         return JSONResponse(status_code=400, content={"detail": str(exc)})
-    raise exc
+    logging.getLogger("smartcal.main").exception("Unhandled ValueError on page path")
+    return render(request, "500.html", active="", status_code=500)
 
 
 # Роутеры (порядок не важен, кроме перекрытий путей).

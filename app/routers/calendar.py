@@ -175,7 +175,9 @@ def calendar_page(
     request: Request,
     view: str = Query(default="week", description="day | week | month"),
     date: str | None = Query(default=None, description="Дата периода, YYYY-MM-DD"),
-    week: str | None = Query(default=None, description="Legacy: любая дата недели, YYYY-MM-DD"),
+    # BUG-30: deprecated — оставлен для старых ссылок; используйте date + view.
+    week: str | None = Query(default=None, deprecated=True,
+                             description="Deprecated: используйте date (+ view=week)"),
     user_id: int | None = Query(default=None, description="Для admin: календарь пользователя"),
     db: Session = Depends(get_db),
     user: User = Depends(require_user),

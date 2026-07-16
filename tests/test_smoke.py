@@ -361,3 +361,15 @@ def test_assistant_chat_history_api_scopes_users(client):
 
     r = client.delete(f"/api/assistant/chats/{chat_id}")
     assert r.status_code == 403
+
+
+def test_custom_404_page(client):
+    """BUG-29: несуществующий URL отдаёт HTML-страницу, а не JSON в браузер."""
+    r = client.get("/no-such-page")
+    assert r.status_code == 404
+    assert "text/html" in r.headers["content-type"]
+    assert "Страница не найдена" in r.text
+    # API-пути по-прежнему отвечают JSON.
+    r = client.get("/api/no-such-endpoint")
+    assert r.status_code == 404
+    assert r.headers["content-type"].startswith("application/json")

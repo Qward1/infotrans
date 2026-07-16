@@ -403,11 +403,17 @@
       );
     }
 
+    // UI-15: подсветка выходных (суббота=6, воскресенье=0).
+    const isWeekend = (iso) => {
+      const dow = dateAtNoon(iso).getDay();
+      return dow === 0 || dow === 6;
+    };
+
     function timegridColumn(day) {
       const segments = segmentsForDay(day.date);
       const empty = segments.length ? "" : `<div class="cal-empty timegrid-empty">нет встреч</div>`;
       return (
-        `<div class="timegrid-col ${day.is_today ? "today" : ""}" data-day="${day.date}">` +
+        `<div class="timegrid-col ${day.is_today ? "today" : ""}${isWeekend(day.date) ? " weekend" : ""}" data-day="${day.date}">` +
         `<div class="timegrid-bg">${hourLines()}</div>${empty}` +
         segments.map(timedEvent).join("") +
         nowLineHtml(day) +
@@ -485,7 +491,7 @@
           ? `<button class="month-more" data-goto-day="${day.date}">+${evs.length - 4} ещё</button>`
           : "";
         return (
-          `<div class="month-cell ${day.is_today ? "today" : ""} ${day.is_current_month ? "" : "outside"}">` +
+          `<div class="month-cell ${day.is_today ? "today" : ""} ${day.is_current_month ? "" : "outside"}${isWeekend(day.date) ? " weekend" : ""}">` +
           `<div class="month-cell-head">` +
           `<button class="month-day-num" data-goto-day="${day.date}" title="Открыть день">${dateAtNoon(day.date).getDate()}</button>` +
           `<button class="day-add" data-new-event data-day="${day.date}">＋</button></div>` +

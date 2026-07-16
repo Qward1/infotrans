@@ -1352,3 +1352,41 @@ textarea:focus-visible {
     scroll-behavior: auto !important;
   }
 }
+
+/* ============================================================================
+   Этап 6: полировка — печать, выходные, sticky-шапки таблиц
+   ============================================================================ */
+
+/* UI-15: подсветка выходных в сетках календаря */
+.timegrid-col.weekend { background: rgba(90, 120, 190, 0.05); }
+:root[data-theme="dark"] .timegrid-col.weekend { background: rgba(0, 0, 0, 0.14); }
+.month-cell.weekend { background: rgba(90, 120, 190, 0.05); }
+:root[data-theme="dark"] .month-cell.weekend { background: rgba(0, 0, 0, 0.14); }
+
+/* UX-20: шапки таблиц остаются видимыми при прокрутке контейнера */
+.table-wrap { overflow: auto; }
+.table-wrap thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--panel-bg);
+  backdrop-filter: blur(8px);
+}
+
+/* UI-15: печать протокола/календаря — без chrome-интерфейса, белый фон */
+@media print {
+  .sidebar, .topbar, .toast-wrap, .notif-panel, .modal-backdrop,
+  .cal-toolbar, .admin-calendar-switch, .chat-input, .dropzone,
+  .btn, button, .duration-presets { display: none !important; }
+  .app-shell { display: block; }
+  .main { padding: 0; }
+  body, .glass, .panel {
+    background: #fff !important;
+    color: #000 !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    border-color: #ddd !important;
+  }
+  .calendar-timegrid { max-height: none; overflow: visible; }
+  a { color: #000; text-decoration: none; }
+}
