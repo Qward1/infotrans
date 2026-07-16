@@ -262,11 +262,12 @@ def _seed_audit(db: Session, users: dict[str, User], admin: User, now: datetime)
 
 
 def _seed_demo(db: Session, settings: Settings) -> None:
-    """Идемпотентное demo-наполнение. Маркер — наличие demo-встреч."""
+    """Идемпотентное demo-наполнение. Маркер — наличие demo-пользователя."""
     if not settings.demo.seed_on_startup:
         return
-    # Уже наполняли (есть хотя бы одна встреча) — выходим, чтобы не дублировать.
-    if db.query(CalendarEvent).first() is not None:
+    # BUG-23: маркер «уже наполняли» — demo-пользователь, а не встречи.
+    # Иначе после удаления всех встреч рестарт возвращал demo-данные.
+    if users_service.get_by_email(db, _DEMO_USERS[0][0]) is not None:
         return
 
     admin = users_service.get_by_email(db, settings.seed_admin.email)

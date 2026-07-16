@@ -15,6 +15,9 @@ from app.templating import render
 
 router = APIRouter(tags=["chat"])
 
+# BUG-14: жёсткий лимит размера загружаемого документа.
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 МБ
+
 
 @router.get("/chat")
 def chat_page(
@@ -45,6 +48,28 @@ async def chat_upload(
 ):
     """Приём документа встречи: извлекаем текст, сохраняем, собираем протокол."""
     settings = get_settings()
+    filename = file.filename or "file"
+    # BUG-14: неподдерживаемое расширение отклоняем ДО чтения файла в память.
+    ext = "." + filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    if ext not in document_reader.SUPPORTED_EXTENSIONS:
+        supported = ", ".join(sorted(document_reader.SUPPORTED_EXTENSIONS))
+        raise HTTPException(
+            status_code=400,
+            detail=f"Формат «{ext or 'без расширения'}» не поддерживается. Загрузите {supported}.",
+        )
+    # Лимит размера: читаем чанками, чтобы не держать в памяти сверхлимитный файл.
+    chunks: list[bytes] = []
+    total = 0
+    while chunk := await file.read(1024 * 1024):
+        total += len(chunk)
+        if total > MAX_UPLOAD_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Файл больше {MAX_UPLOAD_BYTES // (1024 * 1024)} МБ — загрузите документ меньшего размера.",
+            )
+        chunks.append(chunk)
+    raw = b"".join(chunks)
+
     if conversation_id:
         chat = chat_history.get_accessible_chat(db, user, conversation_id)
         if chat is None or chat.is_archived:
@@ -52,11 +77,10 @@ async def chat_upload(
         if chat.user_id != user.id:
             raise HTTPException(status_code=403, detail="Нельзя писать в чужой чат")
     else:
-        chat = chat_history.create_chat(db, user.id, chat_history.title_from_message(file.filename or "Документ"))
-    chat_history.add_message(db, chat, "user", "📎 " + (file.filename or "Документ"))
+        chat = chat_history.create_chat(db, user.id, chat_history.title_from_message(filename))
+    chat_history.add_message(db, chat, "user", "📎 " + filename)
 
-    raw = await file.read()
-    extracted = document_reader.extract(file.filename or "file", file.content_type or "", raw)
+    extracted = document_reader.extract(filename, file.content_type or "", raw)
     document = document_reader.save(db, owner_id=user.id, extracted=extracted)
     audit_service.record(
         db,

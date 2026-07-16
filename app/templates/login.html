@@ -43,12 +43,15 @@
         </button>
       </form>
 
+      {# BUG-15: demo-подсказки только в debug-режиме и без пароля из конфига. #}
+      {% if settings.app.debug %}
       <div class="demo-hint">
         <strong>Demo-доступ</strong><br />
-        Админ: <code>{{ settings.seed_admin.email }}</code> / <code>{{ settings.seed_admin.password }}</code><br />
+        Админ: <code>{{ settings.seed_admin.email }}</code> / <code>admin12345 (demo)</code><br />
         Сотрудники: <code>user@demo.local</code>, <code>anna@demo.local</code>,
         <code>maria@demo.local</code>… / <code>user12345</code>
       </div>
+      {% endif %}
     </div>
   </div>
 

@@ -35,12 +35,14 @@ def login_submit(
 ):
     user = auth_service.authenticate(db, email, password)
     if user is None:
+        # BUG-17: неуспешный вход — это 401, а не 200.
         return render(
             request,
             "login.html",
             active="login",
             error="Неверный email или пароль, либо аккаунт отключён.",
             email=email,
+            status_code=401,
         )
     login_user(request, user)
     audit_service.record(

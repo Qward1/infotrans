@@ -40,6 +40,28 @@ def test_api_requires_auth(client):
     assert r.status_code == 401
 
 
+def test_failed_login_returns_401(client):
+    """BUG-17: неверные учётные данные → HTTP 401, а не 200."""
+    client.get("/logout")
+    r = client.post(
+        "/login",
+        data={"email": "nobody@test.local", "password": "wrong"},
+        follow_redirects=False,
+    )
+    assert r.status_code == 401
+    assert "Неверный email или пароль" in r.text
+
+
+def test_login_page_hides_config_password(client):
+    """BUG-15: страница входа не печатает пароль админа из конфига."""
+    client.get("/logout")
+    settings = get_settings()
+    r = client.get("/login")
+    assert r.status_code == 200
+    if settings.seed_admin.password != "admin12345":
+        assert settings.seed_admin.password not in r.text
+
+
 def test_login_and_dashboard_flow(client):
     settings = get_settings()
     r = client.post(
@@ -154,6 +176,37 @@ def test_admin_calendar_access_and_user_forbidden(client):
     assert r.status_code == 403
     r = client.patch(f"/api/events/{event['id']}", json={"title": "Forbidden edit"})
     assert r.status_code == 403
+
+
+def test_chat_upload_limits(client):
+    """BUG-14: лимит размера (413) и проверка расширения до чтения (400)."""
+    settings = get_settings()
+    client.post(
+        "/login",
+        data={"email": settings.seed_admin.email, "password": settings.seed_admin.password},
+    )
+    # Неподдерживаемое расширение → 400.
+    r = client.post(
+        "/chat/upload",
+        files={"file": ("malware.exe", b"MZ...", "application/octet-stream")},
+    )
+    assert r.status_code == 400
+    assert "не поддерживается" in r.json()["detail"]
+
+    # Файл больше лимита → 413.
+    from app.routers.chat import MAX_UPLOAD_BYTES
+
+    big = b"a" * (MAX_UPLOAD_BYTES + 1)
+    r = client.post("/chat/upload", files={"file": ("big.txt", big, "text/plain")})
+    assert r.status_code == 413
+
+    # Нормальный маленький файл по-прежнему принимается.
+    r = client.post(
+        "/chat/upload",
+        files={"file": ("protokol.txt", "Решили: тест.".encode("utf-8"), "text/plain")},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["document_id"]
 
 
 def test_adaptive_chat_ui_hooks_render(client):
