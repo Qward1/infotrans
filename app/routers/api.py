@@ -21,6 +21,7 @@ from app.schemas.calendar import EventCreate, EventOut, EventUpdate
 from app.schemas.user import UserCreate, UserOut, UserUpdate
 from app.services import audit as audit_service
 from app.services import calendar as calendar_service
+from app.services import event_notifications
 from app.services import scheduling as scheduling_service
 from app.services import stats as stats_service
 from app.services import tickets as tickets_service
@@ -333,6 +334,8 @@ def api_create_event(
         event = calendar_service.create_event(db, owner.id, payload, actor_id=user.id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    # BUG-13: приглашения участникам (и владельцу, если создал админ) — как у ассистента.
+    event_notifications.notify_created(db, get_settings(), event, user)
     audit_service.record(
         db, actor_user_id=user.id, action="create_event", entity_type="event", entity_id=event.id,
         payload={"title": event.title, "owner_user_id": event.owner_id, "created_by": user.id},
@@ -348,10 +351,14 @@ def api_update_event(
     user: User = Depends(require_user),
 ):
     event = _get_owned_event(db, user, event_id)
+    old_times = (event.start_at, event.end_at)
     try:
         event = calendar_service.update_event(db, event, payload, actor_id=user.id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    # BUG-13: при переносе времени уведомляем участников и владельца.
+    if (event.start_at, event.end_at) != old_times:
+        event_notifications.notify_moved(db, get_settings(), event, user)
     audit_service.record(
         db,
         actor_user_id=user.id,

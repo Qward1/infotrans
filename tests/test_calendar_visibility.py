@@ -108,6 +108,57 @@ def test_upcoming_events_includes_participation(db):
 
 
 # --------------------------------------------------------------------------- #
+# BUG-13: API-путь уведомляет участников как ассистентский                     #
+# --------------------------------------------------------------------------- #
+def test_api_create_event_notifies_participant(db):
+    from app.routers.api import api_create_event, api_update_event
+    from app.schemas.calendar import EventCreate, EventUpdate
+    from app.services.assistant import notification_service
+
+    owner = _user(db, "napi@test.local", "Owner API")
+    guest = _user(db, "gapi@test.local", "Guest API")
+    start = datetime.now() + timedelta(days=3)
+    payload = EventCreate(
+        title="Через API", start_at=start, end_at=start + timedelta(hours=1),
+        location_type="online", participants=[guest.email],
+    )
+    event = api_create_event(payload, db=db, user=owner)
+    assert notification_service.unread_count(db, guest.id) == 1
+    assert notification_service.unread_count(db, owner.id) == 0  # себя не уведомляем
+
+    # Перенос времени — участнику приходит уведомление о переносе.
+    api_update_event(event.id, EventUpdate(
+        start_at=start + timedelta(hours=2), end_at=start + timedelta(hours=3)
+    ), db=db, user=owner)
+    assert notification_service.unread_count(db, guest.id) == 2
+
+    # Правка без изменения времени — без лишнего шума.
+    api_update_event(event.id, EventUpdate(description="агенда"), db=db, user=owner)
+    assert notification_service.unread_count(db, guest.id) == 2
+
+
+def test_api_admin_create_notifies_owner(db):
+    from app.models.user import ROLE_ADMIN
+    from app.routers.api import api_create_event
+    from app.schemas.calendar import EventCreate
+    from app.services.assistant import notification_service
+
+    admin = User(email="adm-n@test.local", full_name="Admin", role=ROLE_ADMIN,
+                 password_hash=hash_password("x"), is_active=True)
+    db.add(admin)
+    db.commit()
+    db.refresh(admin)
+    owner = _user(db, "own-n@test.local", "Owner")
+    start = datetime.now() + timedelta(days=3)
+    api_create_event(
+        EventCreate(title="От админа", owner_id=owner.id, start_at=start,
+                    end_at=start + timedelta(hours=1), location_type="online"),
+        db=db, user=admin,
+    )
+    assert notification_service.unread_count(db, owner.id) == 1
+
+
+# --------------------------------------------------------------------------- #
 # BUG-02: слоты и конфликты учитывают участие                                  #
 # --------------------------------------------------------------------------- #
 def test_free_slots_exclude_participant_events(db):

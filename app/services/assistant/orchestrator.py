@@ -41,7 +41,7 @@ from app.models.user import User
 from app.schemas.calendar import EventCreate, EventUpdate
 from app.services import audit as audit_service
 from app.services import availability, calendar as calendar_service
-from app.services import conflict_resolver, location_service
+from app.services import conflict_resolver, event_notifications, location_service
 from app.services import users as users_service
 from app.services.assistant import (
     calendar_context,
@@ -1226,12 +1226,7 @@ def confirm_action(db: Session, settings: Settings, user: User, action_id: str) 
             notification_service.notify(db, settings, user,
                 text=f"Встреча «{event.title}» создана на {event.start_at:%d.%m %H:%M}.",
                 title="Новая встреча", meta={"event_id": event.id})
-            for email in payload.get("participants", []):
-                pu = users_service.get_by_email(db, email)
-                if pu and pu.id != user.id:
-                    notification_service.notify(db, settings, pu,
-                        text=f"Вас пригласили на «{event.title}» {event.start_at:%d.%m %H:%M}.",
-                        title="Приглашение на встречу", meta={"event_id": event.id})
+            event_notifications.notify_created(db, settings, event, user)
 
         elif action.type in (ACTION_MOVE_EVENT,):
             event = calendar_service.get_event(db, payload["event_id"])
@@ -1252,6 +1247,7 @@ def confirm_action(db: Session, settings: Settings, user: User, action_id: str) 
             notification_service.notify(db, settings, user,
                 text=f"«{event.title}» перенесена на {event.start_at:%d.%m %H:%M}.",
                 title="Перенос встречи", meta={"event_id": event.id})
+            event_notifications.notify_moved(db, settings, event, user)
 
         elif action.type == ACTION_UPDATE_EVENT:
             event = calendar_service.get_event(db, payload["event_id"])
@@ -1286,11 +1282,7 @@ def confirm_action(db: Session, settings: Settings, user: User, action_id: str) 
             )
             out["updated_event"] = _event_out(event)
             out["message"] = f"Встреча «{event.title}» отменена."
-            for p in event.participants:
-                if p.user_id != user.id and p.user is not None:
-                    notification_service.notify(db, settings, p.user,
-                        text=f"Встреча «{event.title}» {event.start_at:%d.%m %H:%M} отменена.",
-                        title="Встреча отменена", meta={"event_id": event.id})
+            event_notifications.notify_cancelled(db, settings, event, user)
 
         elif action.type == ACTION_CREATE_REMINDER:
             reminder = Reminder(event_id=payload["event_id"], user_id=user.id,
