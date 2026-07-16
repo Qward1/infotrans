@@ -234,7 +234,9 @@ class MockTravelProvider(TravelProvider):
         options: list[TicketOption] = []
         for mode in _mode_for_transport(params.transport_type):
             options += self._options_for_mode(mode, params, settings)
-        return options
+        # BUG-08: на «сегодня» не показываем рейсы, которые уже ушли.
+        now = datetime.now()
+        return [o for o in options if o.depart_at >= now]
 
 
 class GenericHttpTravelProvider(TravelProvider):

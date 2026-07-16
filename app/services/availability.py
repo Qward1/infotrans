@@ -127,6 +127,16 @@ def _travel_warnings(
     return warnings
 
 
+def _ceil_to_minutes(value: datetime, minutes: int = 5) -> datetime:
+    """Округлить время вверх до ближайшего шага в ``minutes`` минут."""
+    discard = timedelta(
+        minutes=value.minute % minutes, seconds=value.second, microseconds=value.microsecond
+    )
+    if discard:
+        value = value - discard + timedelta(minutes=minutes)
+    return value
+
+
 def find_free_slots(
     db: Session,
     settings: Settings,
@@ -138,11 +148,23 @@ def find_free_slots(
     address: str = "",
     meeting_format: str = "offline",
     limit: int | None = None,
+    not_before: datetime | None = None,
 ) -> list[SlotSuggestion]:
-    """Общие свободные окна всех участников с объяснением и предупреждениями."""
+    """Общие свободные окна всех участников с объяснением и предупреждениями.
+
+    ``not_before`` отсекает прошлое (BUG-08): слоты не начинаются раньше этого
+    времени (округляется вверх до 5 минут).
+    """
     duration = duration_minutes or settings.scheduling.default_meeting_minutes
     work_start, work_end = parse_working_hours(settings)
     limit = limit or settings.scheduling.max_alternatives
+
+    if not_before is not None:
+        floor = _ceil_to_minutes(not_before)
+        if floor > range_start:
+            range_start = floor
+        if range_start >= range_end:
+            return []
 
     events = participant_events(db, participant_ids, range_start, range_end)
     busy = [

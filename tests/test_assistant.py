@@ -206,9 +206,48 @@ def test_travel_buffer_warning_between_offline(db, user):
     assert res.buffer_warnings, "должно быть предупреждение о нехватке времени на дорогу"
 
 
+def test_find_free_slots_not_before_cuts_past(db, user):
+    """BUG-08: «сегодня вечером» не предлагает утренние слоты."""
+    evening = datetime(2026, 7, 6, 17, 3)  # сейчас 17:03
+    slots = availability.find_free_slots(
+        db, SETTINGS, [user.id],
+        datetime(2026, 7, 6, 9, 0), datetime(2026, 7, 6, 19, 0),
+        duration_minutes=60, not_before=evening,
+    )
+    assert slots, "вечером ещё есть окно до конца рабочего дня"
+    for s in slots:
+        assert s.start >= datetime(2026, 7, 6, 17, 5)  # округление вверх до 5 минут
+
+
+def test_find_free_slots_not_before_after_range_returns_empty(db, user):
+    slots = availability.find_free_slots(
+        db, SETTINGS, [user.id],
+        datetime(2026, 7, 6, 9, 0), datetime(2026, 7, 6, 19, 0),
+        duration_minutes=60, not_before=datetime(2026, 7, 6, 20, 0),
+    )
+    assert slots == []
+
+
+def test_assistant_find_slots_today_excludes_past(db, user):
+    """Ассистентский путь: «найди слот сегодня» вечером не предлагает утро."""
+    now = datetime(2026, 7, 6, 17, 0)
+    res = orchestrator.run(SETTINGS, db, user, "Найди свободное время сегодня", now=now)
+    assert res.intent == "find_free_slots"
+    for slot in res.alternative_slots:
+        assert datetime.fromisoformat(slot["start_at"]) >= now
+
+
 # --------------------------------------------------------------------------- #
 # Поиск билетов (mock provider)                                               #
 # --------------------------------------------------------------------------- #
+def test_travel_mock_search_drops_departed_today():
+    """BUG-08: на «сегодня» mock не показывает рейсы, которые уже ушли."""
+    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    opts = travel_search.search(SETTINGS, "Москва", "Казань", today, "any")
+    now = datetime.now()
+    assert all(o.depart_at >= now for o in opts)
+
+
 def test_travel_mock_search_returns_options():
     opts = travel_search.search(SETTINGS, "Москва", "Казань", datetime(2030, 7, 8), "any")
     assert opts, "mock-провайдер должен вернуть варианты"

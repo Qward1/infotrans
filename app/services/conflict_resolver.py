@@ -136,6 +136,7 @@ def resolve_conflicts(
     proposed: ProposedEvent,
     participant_ids: list[int],
     existing_events: list[CalendarEvent] | None = None,
+    not_before: datetime | None = None,
 ) -> ResolveResult:
     """Главная точка входа конфликт-резолвинга."""
     threshold = settings.scheduling.high_priority_threshold
@@ -224,6 +225,7 @@ def resolve_conflicts(
         city=proposed.city,
         address=proposed.address,
         meeting_format=proposed.format,
+        not_before=not_before,
     )
 
     return ResolveResult(

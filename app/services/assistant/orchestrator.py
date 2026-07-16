@@ -498,7 +498,7 @@ def _handle_create_event(settings, db, user, nr, result, now):
         priority=payload["priority"], format=payload["location_type"],
         city=payload["city"], address=payload["address"], title=payload["title"],
     )
-    resolve = conflict_resolver.resolve_conflicts(db, settings, proposed, all_ids)
+    resolve = conflict_resolver.resolve_conflicts(db, settings, proposed, all_ids, not_before=now)
 
     # Реалистичность очного формата (разные города / нехватка времени на дорогу).
     online_suggested = False
@@ -560,7 +560,7 @@ def _handle_create_event(settings, db, user, nr, result, now):
         if resolve.recommended_action == conflict_resolver.ACTION_PROPOSE_RESCHEDULE_LOWER:
             # План переноса менее приоритетной встречи (только после подтверждения).
             lower = min(resolve.conflicts, key=lambda c: c.priority)
-            plan = _build_reschedule_plan(db, settings, lower, all_ids)
+            plan = _build_reschedule_plan(db, settings, lower, all_ids, now)
             if plan:
                 action = create_action(db, user, ACTION_MOVE_EVENT,
                                        f"Перенос «{lower.title}»", plan)
@@ -587,7 +587,7 @@ def _handle_create_event(settings, db, user, nr, result, now):
             type="confirm", label="Сделать онлайн", style="ghost", action_id=action.action_id))
 
 
-def _build_reschedule_plan(db, settings, conflict, participant_ids) -> dict | None:
+def _build_reschedule_plan(db, settings, conflict, participant_ids, now) -> dict | None:
     """Предложить новое время для менее приоритетной встречи."""
     event = calendar_service.get_event(db, conflict.event_id)
     if event is None:
@@ -597,7 +597,7 @@ def _build_reschedule_plan(db, settings, conflict, participant_ids) -> dict | No
     slots = availability.find_free_slots(
         db, settings, [event.owner_id], search_start, search_start + timedelta(days=14),
         duration_minutes=duration, city=event.city, address=event.address,
-        meeting_format=event.location_type,
+        meeting_format=event.location_type, not_before=now,
     )
     # берём первый слот, не совпадающий с текущим временем
     for s in slots:
@@ -693,7 +693,8 @@ def _handle_find_slots(settings, db, user, nr, result, now):
 
     slots = availability.find_free_slots(
         db, settings, all_ids, range_start, range_end, duration_minutes=duration,
-        city=ev.city or "", address=ev.address or "", meeting_format=ev.format or "offline")
+        city=ev.city or "", address=ev.address or "", meeting_format=ev.format or "offline",
+        not_before=now)
 
     result.status = "done"
     result.alternative_slots = [s.to_dict() for s in slots]
