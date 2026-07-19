@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_icons.html" as icons %}
 {% block title %}Ассистент · {{ app_name }}{% endblock %}
 {% block page_title %}Ассистент{% endblock %}
 {% block page_subtitle %}Чат по календарю, слотам и билетам{% endblock %}
@@ -16,7 +17,7 @@
         <strong>История</strong>
         <span id="chat-history-count" class="a-muted"></span>
       </div>
-      <button class="btn icon ghost" id="chat-history-toggle" type="button" aria-label="Свернуть историю">‹</button>
+      <button class="btn icon ghost collapse-btn" id="chat-history-toggle" type="button" aria-label="Свернуть историю">{{ icons.icon("chevron-l") }}</button>
     </div>
     {% if current_user.is_admin %}
     <div class="chat-admin-view">
@@ -33,7 +34,7 @@
       <div class="a-muted" id="chat-readonly-note" style="display:none;">История другого пользователя открыта только для просмотра.</div>
     </div>
     {% endif %}
-    <button class="btn primary small chat-new-btn" id="chat-new" type="button">＋ Новый чат</button>
+    <button class="btn primary small chat-new-btn" id="chat-new" type="button">{{ icons.icon("plus") }} Новый чат</button>
     <div class="chat-history-state" id="chat-history-state">Загрузка истории…</div>
     <div class="chat-history-list" id="chat-history-list"></div>
   </aside>
@@ -56,28 +57,12 @@
     </div>
     <form class="chat-input" id="chat-form">
       <input type="file" id="chat-file" accept=".txt,.md,.pdf,.docx" style="display:none" />
-      <button type="button" class="btn icon ghost" onclick="document.getElementById('chat-file').click()" title="Загрузить документ">📎</button>
+      <button type="button" class="btn icon ghost" onclick="document.getElementById('chat-file').click()" title="Загрузить документ" aria-label="Загрузить документ">{{ icons.icon("paperclip") }}</button>
       <input id="chat-input" autocomplete="off" placeholder="Напишите сообщение…" />
       <button type="submit" class="btn primary">Отправить</button>
     </form>
   </section>
 
-  <aside class="chat-side glass" id="chat-side-panel" aria-label="Подсказки ассистента">
-    <div class="chat-side-head">
-      <h3>Примеры запросов</h3>
-      <button class="btn icon ghost" id="chat-side-toggle" type="button" aria-label="Свернуть подсказки">›</button>
-    </div>
-    <div class="chat-side-content">
-      <div class="hint mb-3">Нажмите, чтобы отправить</div>
-      <div class="suggest">
-        <button class="btn small ghost" data-suggest="Поставь встречу с Анной завтра в 15:00 на час">📅 Поставь встречу с Анной завтра в 15:00 на час</button>
-        <button class="btn small ghost" data-suggest="Покажи мой календарь на неделю">📆 Покажи мой календарь на неделю</button>
-        <button class="btn small ghost" data-suggest="Найди свободное окно с Иваном на пятницу">🟢 Найди свободное окно с Иваном на пятницу</button>
-        <button class="btn small ghost" data-suggest="Найди билеты Москва — Санкт-Петербург на завтра">🎫 Найди билеты Москва — Санкт-Петербург на завтра</button>
-        <button class="btn small ghost" data-suggest="Сформируй протокол из загруженного документа">📝 Сформируй протокол из загруженного документа</button>
-      </div>
-    </div>
-  </aside>
 </div>
 
 {% include "_event_modal.html" %}

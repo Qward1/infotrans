@@ -1,30 +1,43 @@
 {% extends "base.html" %}
+{% import "_icons.html" as icons %}
 {% block title %}Статистика · {{ app_name }}{% endblock %}
 {% block page_title %}Статистика команды{% endblock %}
 {% block page_subtitle %}Нагрузка · форматы · приоритеты · конфликты · журнал аудита{% endblock %}
 
 {% block content %}
 <!-- KPI -->
-<div class="grid cols-4 mb-4">
-  <div class="stat glass">
-    <span class="label">Всего встреч</span>
-    <span class="value"><span class="ic">📆</span>{{ overview.total_events }}</span>
-    <span class="sub">предстоящих: {{ overview.upcoming_events }}</span>
+<div class="kpi-strip glass mb-4">
+  <div class="stat stat-kpi">
+    <span class="ic-tile tile-accent">{{ icons.icon("calendar") }}</span>
+    <div class="stat-body">
+      <span class="label">Всего встреч</span>
+      <span class="value">{{ overview.total_events }}</span>
+      <span class="sub">предстоящих: {{ overview.upcoming_events }}</span>
+    </div>
   </div>
-  <div class="stat glass">
-    <span class="label">Средняя длительность</span>
-    <span class="value"><span class="ic">⏱️</span>{{ overview.avg_duration_minutes }}<span style="font-size:16px;"> мин</span></span>
-    <span class="sub">по всем встречам</span>
+  <div class="stat stat-kpi">
+    <span class="ic-tile tile-accent">{{ icons.icon("clock") }}</span>
+    <div class="stat-body">
+      <span class="label">Средняя длительность</span>
+      <span class="value">{{ overview.avg_duration_minutes }}<span style="font-size:16px;font-weight:600;"> мин</span></span>
+      <span class="sub">по всем встречам</span>
+    </div>
   </div>
-  <div class="stat glass">
-    <span class="label">Конфликтов</span>
-    <span class="value"><span class="ic">⚠️</span>{{ overview.conflicts }}</span>
-    <span class="sub">пересечений в расписании</span>
+  <div class="stat stat-kpi">
+    <span class="ic-tile {{ 'tile-red' if overview.conflicts else 'tile-muted' }}">{{ icons.icon("warning") }}</span>
+    <div class="stat-body">
+      <span class="label">Конфликтов</span>
+      <span class="value">{{ overview.conflicts }}</span>
+      <span class="sub">пересечений в расписании</span>
+    </div>
   </div>
-  <div class="stat glass">
-    <span class="label">Переносов</span>
-    <span class="value"><span class="ic">🔀</span>{{ overview.reschedules }}</span>
-    <span class="sub">по журналу действий</span>
+  <div class="stat stat-kpi">
+    <span class="ic-tile tile-accent">{{ icons.icon("shuffle") }}</span>
+    <div class="stat-body">
+      <span class="label">Переносов</span>
+      <span class="value">{{ overview.reschedules }}</span>
+      <span class="sub">по журналу действий</span>
+    </div>
   </div>
 </div>
 

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_icons.html" as icons %}
 {% block title %}Уведомления · {{ app_name }}{% endblock %}
 {% block page_title %}Уведомления{% endblock %}
 {% block page_subtitle %}Все каналы · непрочитанных: <span id="notif-unread-count">{{ unread }}</span>{% endblock %}
@@ -35,9 +36,9 @@
             <div class="muted" style="font-size:13px;">{{ n.text }}</div>
           </td>
           <td>
-            {% if n.channel == 'messenger' %}<span class="badge badge-online">💬 messenger</span>
-            {% elif n.channel == 'email' %}<span class="badge badge-hybrid">✉️ email</span>
-            {% else %}<span class="badge badge-user">🌐 web</span>{% endif %}
+            {% if n.channel == 'messenger' %}<span class="badge badge-online">{{ icons.icon("chat", "ic-14") }} messenger</span>
+            {% elif n.channel == 'email' %}<span class="badge badge-hybrid">{{ icons.icon("mail", "ic-14") }} email</span>
+            {% else %}<span class="badge badge-user">{{ icons.icon("globe", "ic-14") }} web</span>{% endif %}
           </td>
           <td>
             {% if it.related %}
@@ -54,7 +55,7 @@
   </div>
   {% else %}
   <div class="empty-state">
-    <div class="big">🔔</div>
+    <div class="empty-ic">{{ icons.icon("bell") }}</div>
     Уведомлений пока нет.<br />
     Они появляются при создании встреч, приглашениях, переносах и напоминаниях.
   </div>

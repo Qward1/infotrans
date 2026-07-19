@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Страница не найдена · {{ app_name }}</title>
-  <link rel="stylesheet" href="{{ base }}/static/css/app.css" />
+  <link rel="stylesheet" href="{{ base }}/static/css/app.css?v={{ asset_ver | default('') }}" />
   <script>
     (function () {
       var t = localStorage.getItem("smartcal-theme") ||
@@ -14,10 +14,12 @@
   </script>
 </head>
 <body>
+  {% import "_icons.html" as icons %}
+  {{ icons.sprite() }}
   <div class="login-wrap">
     <div class="login-card glass" style="text-align:center;">
       <div class="empty-state">
-        <div class="big">🧭</div>
+        <div class="empty-ic">{{ icons.icon("compass") }}</div>
         <h1>404 · Страница не найдена</h1>
         <p class="muted">Такой страницы нет — возможно, ссылка устарела или в адресе опечатка.</p>
         <a href="{{ base }}/dashboard" class="btn primary mt-2">На дашборд</a>

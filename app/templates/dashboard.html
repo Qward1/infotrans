@@ -1,49 +1,62 @@
 {% extends "base.html" %}
 {% import "_macros.html" as m %}
+{% import "_icons.html" as icons %}
 {% block title %}Дашборд · {{ app_name }}{% endblock %}
 {% block page_title %}Дашборд{% endblock %}
 {% block page_subtitle %}Обзор недели · {{ week_start.strftime('%d.%m.%Y') }}{% endblock %}
 
 {% block topbar_actions %}
-<button class="btn primary" data-new-event>＋ Новая встреча</button>
+<button class="btn primary" data-new-event>{{ icons.icon("plus") }} Новая встреча</button>
 {% endblock %}
 
 {% block content %}
-<section class="panel glass greeting mb-4">
-  <h2>{{ greeting }}, {{ (current_user.full_name or current_user.email).split(' ')[0] }}! 👋</h2>
+<section class="greeting mb-5">
+  <h2>{{ greeting }}, {{ (current_user.full_name or current_user.email).split(' ')[0] }}!</h2>
   <p>
     {% if stats.today %}Сегодня у вас {{ stats.today }} встреч(и).{% else %}На сегодня встреч не запланировано.{% endif %}
     {% if stats.conflicts %} Обнаружено конфликтов: {{ stats.conflicts }}.{% endif %}
   </p>
 </section>
 
-<div class="grid cols-4 mb-4">
-  <div class="stat glass">
-    <span class="label">Встреч на неделе</span>
-    <span class="value"><span class="ic">📆</span>{{ stats.week_events }}</span>
+<div class="kpi-strip glass mb-5">
+  <div class="stat stat-kpi">
+    <span class="ic-tile tile-accent">{{ icons.icon("calendar") }}</span>
+    <div class="stat-body">
+      <span class="label">Встреч на неделе</span>
+      <span class="value">{{ stats.week_events }}</span>
+    </div>
   </div>
-  <div class="stat glass">
-    <span class="label">Сегодня</span>
-    <span class="value"><span class="ic">📌</span>{{ stats.today }}</span>
+  <div class="stat stat-kpi">
+    <span class="ic-tile tile-accent">{{ icons.icon("pin") }}</span>
+    <div class="stat-body">
+      <span class="label">Сегодня</span>
+      <span class="value">{{ stats.today }}</span>
+    </div>
   </div>
-  <div class="stat glass">
-    <span class="label">Свободных окон (7 дн.)</span>
-    <span class="value"><span class="ic">🟢</span>{{ stats.free_slots }}</span>
+  <div class="stat stat-kpi">
+    <span class="ic-tile tile-green">{{ icons.icon("clock") }}</span>
+    <div class="stat-body">
+      <span class="label">Свободных окон · 7 дн.</span>
+      <span class="value">{{ stats.free_slots }}</span>
+    </div>
   </div>
-  <div class="stat glass">
-    <span class="label">Возможных конфликтов</span>
-    <span class="value"><span class="ic">⚠️</span>{{ stats.conflicts }}</span>
+  <div class="stat stat-kpi">
+    <span class="ic-tile {{ 'tile-red' if stats.conflicts else 'tile-muted' }}">{{ icons.icon("warning") }}</span>
+    <div class="stat-body">
+      <span class="label">Возможных конфликтов</span>
+      <span class="value">{{ stats.conflicts }}</span>
+    </div>
   </div>
 </div>
 
 <section class="panel glass mb-4">
   <div class="panel-head"><h2>Быстрые действия</h2></div>
   <div class="quick-actions">
-    <a class="qa" data-new-event><span class="qa-ic">➕</span><span class="qa-label">Создать встречу</span></a>
-    <a class="qa" href="{{ base }}/chat"><span class="qa-ic">💬</span><span class="qa-label">Чат-секретарь</span></a>
-    <a class="qa" href="{{ base }}/chat" data-suggest-link="Когда я свободен на этой неделе на 30 минут?"><span class="qa-ic">🟢</span><span class="qa-label">Свободный слот</span></a>
-    <a class="qa" href="{{ base }}/documents"><span class="qa-ic">📄</span><span class="qa-label">Загрузить протокол</span></a>
-    <a class="qa" href="{{ base }}/travel"><span class="qa-ic">🎫</span><span class="qa-label">Найти билеты</span></a>
+    <a class="qa" data-new-event><span class="ic-tile tile-accent qa-ic">{{ icons.icon("plus") }}</span><span class="qa-label">Создать встречу</span></a>
+    <a class="qa" href="{{ base }}/chat"><span class="ic-tile tile-accent qa-ic">{{ icons.icon("chat") }}</span><span class="qa-label">Чат-секретарь</span></a>
+    <a class="qa" href="{{ base }}/chat" data-suggest-link="Когда я свободен на этой неделе на 30 минут?"><span class="ic-tile tile-green qa-ic">{{ icons.icon("search") }}</span><span class="qa-label">Свободный слот</span></a>
+    <a class="qa" href="{{ base }}/documents"><span class="ic-tile tile-accent qa-ic">{{ icons.icon("file-text") }}</span><span class="qa-label">Загрузить протокол</span></a>
+    <a class="qa" href="{{ base }}/travel"><span class="ic-tile tile-accent qa-ic">{{ icons.icon("ticket") }}</span><span class="qa-label">Найти билеты</span></a>
   </div>
 </section>
 
@@ -57,7 +70,7 @@
       {% if today_events %}
         {% for e in today_events %}{{ m.event_row(e, viewer=current_user) }}{% endfor %}
       {% else %}
-        <div class="empty-state"><div class="big">☕</div>На сегодня встреч нет — хорошего дня!</div>
+        <div class="empty-state"><div class="empty-ic">{{ icons.icon("coffee") }}</div>На сегодня встреч нет — хорошего дня!</div>
       {% endif %}
     </section>
 
@@ -68,7 +81,7 @@
         <div class="vbar">
           <div class="vval">{{ d.count }}</div>
           <div class="col" style="height: {{ ((d.count / max_load * 100) if max_load else 0) | round(0, 'floor') }}%;
-            {% if d.is_today %}background: linear-gradient(180deg, var(--warning), var(--accent-strong));{% endif %}"></div>
+            {% if d.is_today %}background: var(--warning);{% endif %}"></div>
           <div class="vlabel">{{ d.label }}</div>
         </div>
         {% endfor %}
@@ -86,7 +99,7 @@
         {% for e in upcoming %}{{ m.event_row(e, viewer=current_user) }}{% endfor %}
       {% else %}
         <div class="empty-state">
-          <div class="big">🗓️</div>
+          <div class="empty-ic">{{ icons.icon("calendar") }}</div>
           Пока нет запланированных встреч.<br />
           <button class="btn primary small" data-new-event style="margin-top:12px;">Создать первую</button>
         </div>
@@ -112,7 +125,7 @@
         </a>
         {% endfor %}
       {% else %}
-        <p class="muted mb-0">Пересечений не найдено. Расписание в порядке 👍</p>
+        <p class="muted mb-0 flex items-center gap-8"><span style="color:var(--success);display:inline-flex">{{ icons.icon("check-circle", "ic-18") }}</span>Пересечений не найдено. Расписание в порядке.</p>
       {% endif %}
     </section>
   </div>

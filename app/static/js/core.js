@@ -13,6 +13,12 @@
   const BASE = (window.APP_BASE || "").replace(/\/+$/, "");
   window.APP_BASE = BASE;
 
+  /* -------- SVG-иконка из спрайта (JS-аналог макроса icons.icon) -------- */
+  // Символы спрайта уже в DOM (base.html), поэтому <use> работает и из
+  // вставленного через innerHTML HTML. Единый набор иконок на весь проект.
+  const icon = (name, cls) =>
+    `<svg class="ic-svg${cls ? " " + cls : ""}" aria-hidden="true" focusable="false"><use href="#i-${name}"></use></svg>`;
+
   /* ----------------------------- Тема ----------------------------- */
   const THEME_KEY = "smartcal-theme";
   function applyTheme(theme) {
@@ -22,7 +28,7 @@
       // UI-02: иконка из SVG-спрайта; fallback на эмодзи для страниц без спрайта.
       const use = btn.querySelector("use");
       if (use) use.setAttribute("href", theme === "dark" ? "#i-sun" : "#i-moon");
-      else btn.textContent = theme === "dark" ? "☀️" : "🌙";
+      else btn.innerHTML = icon(theme === "dark" ? "sun" : "moon");
     }
   }
   window.toggleTheme = function () {
@@ -150,7 +156,7 @@
       confirmModal.className = "modal-backdrop confirm-backdrop";
       confirmModal.innerHTML =
         '<div class="modal glass confirm-modal" role="dialog" aria-modal="true">' +
-        '<div class="confirm-icon">⚠️</div>' +
+        '<div class="confirm-icon">' + icon("warning") + "</div>" +
         '<div class="confirm-text"></div>' +
         '<div class="modal-foot">' +
         '<button type="button" class="btn ghost" data-role="cancel">Отмена</button>' +
@@ -262,7 +268,7 @@
 
   // Публичный namespace для страничных модулей.
   window.smartcal = {
-    esc, pad, toLocalInput, fmtDateTime, fmtTime, fmtChatDate, spinner,
+    esc, pad, toLocalInput, fmtDateTime, fmtTime, fmtChatDate, spinner, icon,
     clearFormError, emitEventChanged,
   };
 

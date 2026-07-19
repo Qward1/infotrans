@@ -12,7 +12,7 @@
   const showFormError = window.showFormError;
   const openModalEl = window.openModalEl;
   const closeModalEl = window.closeModalEl;
-  const { esc, pad, toLocalInput, fmtDateTime, fmtTime, fmtChatDate, spinner, clearFormError, emitEventChanged } = window.smartcal;
+  const { esc, pad, toLocalInput, fmtDateTime, fmtTime, fmtChatDate, spinner, icon, clearFormError, emitEventChanged } = window.smartcal;
 
   const escHtml = esc; // ARCH-05: единый esc
 
@@ -56,8 +56,8 @@
       const warns = (data.warnings || []).filter(Boolean);
       const fu = p.follow_up_meetings || [];
       let html = "";
-      if (data.filename) html += `<div class="a-card-title" style="font-size:16px;">📄 ${escHtml(data.filename)}</div>`;
-      if (warns.length) html += `<div class="a-warn">⚠️ ${escHtml(warns.join("; "))}</div>`;
+      if (data.filename) html += `<div class="a-card-title" style="font-size:16px;">${icon("file-text", "ic-18")} ${escHtml(data.filename)}</div>`;
+      if (warns.length) html += `<div class="a-warn">${icon("warning", "ic-14")} ${escHtml(warns.join("; "))}</div>`;
       if (p.summary) html += `<div class="proto-sec"><b>Краткое содержание</b><div>${escHtml(p.summary)}</div></div>`;
       if (p.participants && p.participants.length)
         html += `<div class="proto-sec"><b>Участники</b><div>${p.participants.map(escHtml).join(", ")}</div></div>`;
@@ -91,7 +91,7 @@
           try {
             const res = await window.api("POST", `/api/assistant/actions/${confirmAction.action_id}/confirm`, {});
             window.toast(res.message || "Встречи созданы");
-            b.textContent = "✓ " + (res.message || "Готово");
+            b.textContent = res.message || "Готово";
             if (window.refreshNotifications) window.refreshNotifications();
           } catch (e) { b.disabled = false; window.toast(e.message, "err"); }
         });
@@ -109,7 +109,7 @@
       row.className = "event-row";
       row.setAttribute("data-doc-id", docId);
       row.innerHTML =
-        `<div class="prio" style="background:var(--chip-bg); color:var(--accent-strong);">📄</div>` +
+        `<div class="prio" style="background:var(--chip-bg); color:var(--accent-strong);">${icon("file-text", "ic-18")}</div>` +
         `<div class="body"><div class="title">${escHtml(filename)}</div>` +
         `<div class="sub muted">только что</div></div>` +
         `<button class="btn small primary" data-make-protocol="${docId}">Сформировать протокол</button>` +

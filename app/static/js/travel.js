@@ -12,9 +12,12 @@
   const showFormError = window.showFormError;
   const openModalEl = window.openModalEl;
   const closeModalEl = window.closeModalEl;
-  const { esc, pad, toLocalInput, fmtDateTime, fmtTime, fmtChatDate, spinner, clearFormError, emitEventChanged } = window.smartcal;
+  const { esc, pad, toLocalInput, fmtDateTime, fmtTime, fmtChatDate, spinner, icon, clearFormError, emitEventChanged } = window.smartcal;
 
   const escHtml = esc; // ARCH-05: единый esc
+  // Единый набор иконок транспорта (SVG-спрайт).
+  const MODE_ICON = { plane: "plane", train: "train", bus: "bus" };
+  const modeIconHtml = (mode, fallback) => icon(MODE_ICON[mode] || fallback || "ticket", "ic-24");
 
   /* =====================================================================
      Поиск билетов (travel)
@@ -23,7 +26,6 @@
   if (travelForm) {
     const results = document.getElementById("travel-results");
     const countEl = document.getElementById("travel-count");
-    const modeIcon = { plane: "✈️", train: "🚆", bus: "🚌" };
     const modeRu = { plane: "Авиа", train: "ЖД", bus: "Автобус" };
     const todayIso = () => {
       const d = new Date();
@@ -40,7 +42,7 @@
       });
     });
 
-    // UX-16: «⇄» меняет города местами.
+    // UX-16: кнопка-своп меняет города местами.
     const swapBtn = document.getElementById("travel-swap");
     if (swapBtn) {
       swapBtn.addEventListener("click", () => {
@@ -80,7 +82,7 @@
       const ret = s.return_date ? ` · обратно ${escHtml(s.return_date)}` : "";
       return (
         `<div class="ticket-card source-card">` +
-        `<div class="tc-mode">${modeIcon[s.mode] || "🔎"}<span>${escHtml(mode)}</span></div>` +
+        `<div class="tc-mode">${modeIconHtml(s.mode, "search")}<span>${escHtml(mode)}</span></div>` +
         `<div class="tc-main">` +
         `<div class="tc-time"><b>${escHtml(s.title || s.provider)}</b></div>` +
         `<div class="tc-sub muted">${escHtml(s.origin)} → ${escHtml(s.destination)} · ${escHtml(s.depart_date)}${ret}</div>` +
@@ -106,7 +108,7 @@
         : `<span class="btn small ghost disabled" aria-disabled="true">Ссылка недоступна</span>`;
       return (
         `<div class="ticket-card">` +
-        `<div class="tc-mode">${modeIcon[o.mode] || "🎫"}<span>${escHtml(modeRu[o.mode] || o.mode)}</span></div>` +
+        `<div class="tc-mode">${modeIconHtml(o.mode, "ticket")}<span>${escHtml(modeRu[o.mode] || o.mode)}</span></div>` +
         `<div class="tc-main">` +
         `<div class="tc-time">${time}</div>` +
         `<div class="tc-carrier">${escHtml(carrier)}</div>` +
@@ -179,7 +181,7 @@
           return;
         }
         if (!data.length) {
-          results.innerHTML = `<div class="empty-state"><div class="big">🎫</div>По заданным параметрам билетов не найдено.</div>`;
+          results.innerHTML = `<div class="empty-state"><div class="empty-ic">${icon("ticket")}</div>По заданным параметрам билетов не найдено.</div>`;
           return;
         }
         countEl.textContent = `найдено: ${data.length}`;

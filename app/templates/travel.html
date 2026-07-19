@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_icons.html" as icons %}
 {% block title %}Билеты · {{ app_name }}{% endblock %}
 {% block page_title %}Поиск билетов и поездок{% endblock %}
 {% block page_subtitle %}Авиа · ЖД · автобус{% endblock %}
@@ -15,7 +16,7 @@
             <input name="origin" required placeholder="Москва" value="Москва" />
           </div>
           <button type="button" class="btn icon ghost route-swap" id="travel-swap"
-                  title="Поменять города местами" aria-label="Поменять города местами">⇄</button>
+                  title="Поменять города местами" aria-label="Поменять города местами">{{ icons.icon("swap") }}</button>
           <div class="field">
             <label>Куда</label>
             <input name="destination" required placeholder="Санкт-Петербург" value="Санкт-Петербург" />
@@ -68,7 +69,7 @@
             <label class="check"><input type="checkbox" name="pref" value="direct" /> без пересадок</label>
           </div>
         </div>
-        <button type="submit" class="btn primary" style="width:100%; justify-content:center;">🔎 Найти билеты</button>
+        <button type="submit" class="btn primary" style="width:100%; justify-content:center;">{{ icons.icon("search") }} Найти билеты</button>
       </form>
     </section>
 
@@ -79,7 +80,7 @@
       </div>
       <div id="travel-results">
         <div class="empty-state" id="travel-empty">
-          <div class="big">🎫</div>
+          <div class="empty-ic">{{ icons.icon("ticket") }}</div>
           Задайте маршрут и нажмите «Найти билеты».<br />
           Появятся варианты авиа/ЖД/автобус с ценой, временем в пути и ссылкой.
         </div>
@@ -89,32 +90,12 @@
 
   <aside class="travel-side">
     <div class="card glass">
-      <h3>Быстрые маршруты</h3>
-      <div class="hint mb-3">Нажмите, чтобы подставить</div>
+      <p class="eyebrow">Быстрые маршруты</p>
       <div class="suggest">
         <button class="btn small ghost" data-route="Москва|Санкт-Петербург">Москва → Санкт-Петербург</button>
         <button class="btn small ghost" data-route="Москва|Казань">Москва → Казань</button>
         <button class="btn small ghost" data-route="Москва|Сочи">Москва → Сочи</button>
         <button class="btn small ghost" data-route="Санкт-Петербург|Казань">СПб → Казань</button>
-      </div>
-    </div>
-    <div class="card glass">
-      <h3>Источник данных</h3>
-      <div class="hint">
-        {% if tickets_mode == "sites" %}
-          Включён поиск по сайтам без API-ключей: Aviasales, РЖД, Туту и автобусные источники.
-        {% elif tickets_mode == "mock" %}
-          Включён demo-provider. Для production переключите <code>tickets.mode: provider</code>.
-        {% else %}
-          Поиск идёт через внешний provider из настроек. Если ключ не задан, будет показана ошибка API.
-        {% endif %}
-      </div>
-    </div>
-    <div class="card glass">
-      <h3>Через ассистента</h3>
-      <div class="hint">
-        То же самое можно спросить в чате: «Найди билеты Москва — Санкт-Петербург на завтра».
-        <a href="{{ base }}/chat" class="btn small ghost mt-2">💬 Открыть чат</a>
       </div>
     </div>
   </aside>

@@ -12,7 +12,9 @@
   const showFormError = window.showFormError;
   const openModalEl = window.openModalEl;
   const closeModalEl = window.closeModalEl;
-  const { esc, pad, toLocalInput, fmtDateTime, fmtTime, fmtChatDate, spinner, clearFormError, emitEventChanged } = window.smartcal;
+  const { esc, pad, toLocalInput, fmtDateTime, fmtTime, fmtChatDate, spinner, icon, clearFormError, emitEventChanged } = window.smartcal;
+  // Заголовок карточки ассистента с ведущей SVG-иконкой (единый набор иконок).
+  const cardTitle = (name, text) => `<div class="a-card-title">${icon(name, "ic-18")} ${esc(text)}</div>`;
 
   /* =====================================================================
      Чат-ассистент (с карточками и подтверждением действий)
@@ -28,14 +30,12 @@
     const historyCount = document.getElementById("chat-history-count");
     const historyToggle = document.getElementById("chat-history-toggle");
     const historyMobile = document.getElementById("chat-history-mobile");
-    const sideToggle = document.getElementById("chat-side-toggle");
     const saveState = document.getElementById("chat-save-state");
     const chatUserSelect = document.getElementById("chat-user-select");
     const chatUserSearch = document.getElementById("chat-user-search");
     const readonlyNote = document.getElementById("chat-readonly-note");
     const newChatButtons = [document.getElementById("chat-new"), document.getElementById("chat-new-inline")].filter(Boolean);
     const CHAT_HISTORY_COLLAPSED_KEY = "smartcal-chat-history-collapsed";
-    const CHAT_SIDE_COLLAPSED_KEY = "smartcal-chat-side-collapsed";
     const chatMq = window.matchMedia("(max-width: 1080px)");
     const currentUserId = shell ? String(shell.getAttribute("data-current-user-id") || "") : "";
     let activeChatId = null;
@@ -91,20 +91,9 @@
       shell.classList.toggle("chat-history-collapsed", collapsed);
       localStorage.setItem(CHAT_HISTORY_COLLAPSED_KEY, collapsed ? "1" : "0");
       if (historyToggle) {
-        historyToggle.textContent = collapsed ? "›" : "‹";
+        // Иконка-шеврон разворачивается через CSS по классу состояния shell.
         historyToggle.setAttribute("aria-label", collapsed ? "Развернуть историю" : "Свернуть историю");
         historyToggle.setAttribute("aria-expanded", String(!collapsed));
-      }
-    }
-
-    function applySideCollapsed(collapsed) {
-      if (!shell) return;
-      shell.classList.toggle("chat-side-collapsed", collapsed);
-      localStorage.setItem(CHAT_SIDE_COLLAPSED_KEY, collapsed ? "1" : "0");
-      if (sideToggle) {
-        sideToggle.textContent = collapsed ? "‹" : "›";
-        sideToggle.setAttribute("aria-label", collapsed ? "Развернуть подсказки" : "Свернуть подсказки");
-        sideToggle.setAttribute("aria-expanded", String(!collapsed));
       }
     }
 
@@ -140,7 +129,7 @@
       const loc = LOC_RU[e.location_type] || e.location_type || "";
       const place = e.city ? " · " + esc(e.city) : (e.meeting_url ? " · ссылка" : "");
       return (
-        `<div class="a-card-title">📅 ${esc(e.title || "Встреча")}</div>` +
+        cardTitle("calendar", e.title || "Встреча") +
         `<div class="a-card-row">${fmtDT(e.start_at)}–${fmtT(e.end_at)} · ${esc(loc)}${place}` +
         (e.priority != null ? ` · приоритет ${e.priority}` : "") + `</div>`
       );
@@ -150,7 +139,7 @@
       // UX-06: контекст диалога (тема/участники/формат) едет в модалку вместе со слотом.
       const base = prefill || {};
       return slots.map((s, i) => {
-        const w = (s.warnings || []).length ? `<div class="a-warn">⚠️ ${esc(s.warnings.join("; "))}</div>` : "";
+        const w = (s.warnings || []).length ? `<div class="a-warn">${icon("warning", "ic-14")} ${esc(s.warnings.join("; "))}</div>` : "";
         const payload = Object.assign({}, base, { start_at: s.start_at, end_at: s.end_at, source: "assistant" });
         return (
           `<div class="a-slot">` +
@@ -162,15 +151,18 @@
       }).join("");
     }
 
+    // Единый набор иконок транспорта (SVG-спрайт).
+    const MODE_ICON = { plane: "plane", train: "train", bus: "bus" };
+    const modeIcon = (mode, fallback) => icon(MODE_ICON[mode] || fallback || "ticket", "ic-18");
+
     function ticketsHtml(opts) {
-      const icon = { plane: "✈️", train: "🚆", bus: "🚌" };
       const modeRu = { plane: "Авиа", train: "ЖД", bus: "Автобус" };
       return opts.map((o) => {
         const h = Math.floor(o.duration_minutes / 60), m = o.duration_minutes % 60;
         const tr = o.transfers > 0 ? `, пересадок: ${o.transfers}` : ", без пересадок";
         return (
           `<div class="a-slot">` +
-          `<div>${icon[o.mode] || ""} <b>${esc(modeRu[o.mode] || o.mode)}</b> · ${fmtDT(o.depart_at)}→${fmtT(o.arrive_at)} (${h}ч ${String(m).padStart(2, "0")}м${tr})` +
+          `<div>${modeIcon(o.mode)} <b>${esc(modeRu[o.mode] || o.mode)}</b> · ${fmtDT(o.depart_at)}→${fmtT(o.arrive_at)} (${h}ч ${String(m).padStart(2, "0")}м${tr})` +
           `<div class="a-muted">${o.price.toFixed(0)} ${esc(o.currency)}</div></div>` +
           `<a class="btn small ghost" href="${esc(o.url)}" target="_blank" rel="noopener">Открыть</a>` +
           `</div>`
@@ -179,11 +171,10 @@
     }
 
     function travelSourcesHtml(sources) {
-      const icon = { plane: "✈️", train: "🚆", bus: "🚌" };
       const modeRu = { plane: "Авиа", train: "ЖД", bus: "Автобус" };
       return sources.map((s) => (
         `<div class="a-slot">` +
-        `<div>${icon[s.mode] || "🔎"} <b>${esc(s.title || s.provider)}</b>` +
+        `<div>${modeIcon(s.mode, "search")} <b>${esc(s.title || s.provider)}</b>` +
         `<div class="a-muted">${esc(s.origin)} → ${esc(s.destination)} · ${esc(s.depart_date)} · ${esc(modeRu[s.mode] || s.mode || "")}</div>` +
         (s.note ? `<div class="a-muted">${esc(s.note)}</div>` : "") +
         `</div>` +
@@ -195,7 +186,7 @@
     function protocolHtml(p) {
       const list = (arr) => (arr && arr.length ? "<ul>" + arr.map((x) => `<li>${esc(typeof x === "string" ? x : x.title)}</li>`).join("") + "</ul>" : "<div class='a-muted'>—</div>");
       return (
-        `<div class="a-card-title">📝 Протокол</div>` +
+        `<div class="a-card-title">${icon("file-text", "ic-18")} Протокол</div>` +
         (p.summary ? `<div class="a-card-row">${esc(p.summary)}</div>` : "") +
         `<div class="a-sec"><b>Решения</b>${list(p.decisions)}</div>` +
         `<div class="a-sec"><b>Задачи</b>${list(p.action_items)}</div>` +
@@ -206,9 +197,9 @@
 
     function conflictHtml(d) {
       const rows = (d.conflicts || []).map((c) =>
-        `<div class="a-slot"><div>⛔ ${c.owner_name ? `у ${esc(c.owner_name)}: ` : ""}<b>${esc(c.title)}</b> · ${fmtDT(c.start_at)}–${fmtT(c.end_at)} · приоритет ${c.priority}` +
+        `<div class="a-slot"><div>${icon("ban", "ic-14")} ${c.owner_name ? `у ${esc(c.owner_name)}: ` : ""}<b>${esc(c.title)}</b> · ${fmtDT(c.start_at)}–${fmtT(c.end_at)} · приоритет ${c.priority}` +
         (c.is_high_priority ? " · высокий" : "") + `</div></div>`).join("");
-      return `<div class="a-card-title">⚠️ Конфликт расписания</div>` +
+      return cardTitle("warning", "Конфликт расписания") +
         (d.explanation ? `<div class="a-card-row">${esc(d.explanation)}</div>` : "") + rows;
     }
 
@@ -239,27 +230,27 @@
       el.className = "a-card";
       const d = card.data || {};
       if (card.kind === "created_event") el.innerHTML = eventCardHtml(d);
-      else if (card.kind === "alternative_slots") el.innerHTML = `<div class="a-card-title">🟢 ${esc(card.title)}</div>` + slotsHtml(d.slots || [], d.prefill);
-      else if (card.kind === "travel_options") el.innerHTML = `<div class="a-card-title">🎫 ${esc(card.title)}</div>` + ticketsHtml(d.options || []);
-      else if (card.kind === "travel_sources") el.innerHTML = `<div class="a-card-title">🔎 ${esc(card.title)}</div>` + travelSourcesHtml(d.sources || []);
+      else if (card.kind === "alternative_slots") el.innerHTML = cardTitle("check-circle", card.title) + slotsHtml(d.slots || [], d.prefill);
+      else if (card.kind === "travel_options") el.innerHTML = cardTitle("ticket", card.title) + ticketsHtml(d.options || []);
+      else if (card.kind === "travel_sources") el.innerHTML = cardTitle("search", card.title) + travelSourcesHtml(d.sources || []);
       else if (card.kind === "protocol") el.innerHTML = protocolHtml(d);
       else if (card.kind === "followups") {
         // FN-05: предпросмотр встреч, которые будут созданы из протокола.
-        el.innerHTML = `<div class="a-card-title">📅 ${esc(card.title)}</div>` +
+        el.innerHTML = cardTitle("calendar", card.title) +
           (d.events || []).map((e) =>
             `<div class="a-slot"><div><b>${fmtDT(e.start_at)}–${fmtT(e.end_at)}</b> ${esc(e.title)}` +
             `<div class="a-muted">${esc(LOC_RU[e.location_type] || e.location_type || "")}</div></div></div>`
           ).join("");
       }
-      else if (card.kind === "tasks") el.innerHTML = `<div class="a-card-title">✅ Задачи</div><ul>` + (d.items || []).map((i) => `<li>${esc(i)}</li>`).join("") + "</ul>";
+      else if (card.kind === "tasks") el.innerHTML = `<div class="a-card-title">${icon("check-circle", "ic-18")} Задачи</div><ul>` + (d.items || []).map((i) => `<li>${esc(i)}</li>`).join("") + "</ul>";
       else if (card.kind === "conflict") el.innerHTML = conflictHtml(d);
-      else if (card.kind === "employee_availability") el.innerHTML = `<div class="a-card-title">🟢 ${esc(card.title)}</div>` + employeeAvailabilityHtml(d.items || []);
-      else if (card.kind === "reschedule_plan") el.innerHTML = `<div class="a-card-title">🔀 План переноса</div><div class="a-card-row">«${esc((d.conflict||{}).title||"встреча")}»: ${fmtDT(d.old_start_at)} → <b>${fmtDT(d.start_at)}</b></div>`;
-      else if (card.kind === "reminder") el.innerHTML = `<div class="a-card-title">⏰ Напоминание</div><div class="a-card-row">${esc((d.event||{}).title||"")} · за ${d.minutes_before} мин (${fmtDT(d.remind_at)})</div>`;
+      else if (card.kind === "employee_availability") el.innerHTML = cardTitle("check-circle", card.title) + employeeAvailabilityHtml(d.items || []);
+      else if (card.kind === "reschedule_plan") el.innerHTML = `<div class="a-card-title">${icon("shuffle", "ic-18")} План переноса</div><div class="a-card-row">«${esc((d.conflict||{}).title||"встреча")}»: ${fmtDT(d.old_start_at)} → <b>${fmtDT(d.start_at)}</b></div>`;
+      else if (card.kind === "reminder") el.innerHTML = `<div class="a-card-title">${icon("clock", "ic-18")} Напоминание</div><div class="a-card-row">${esc((d.event||{}).title||"")} · за ${d.minutes_before} мин (${fmtDT(d.remind_at)})</div>`;
       else if (card.kind === "summary" || card.kind === "calendar") {
         const evs = d.events || d.upcoming || [];
         // BUG-25: отменённые показываем зачёркнутыми.
-        el.innerHTML = `<div class="a-card-title">🗓️ ${esc(card.title)}</div>` +
+        el.innerHTML = cardTitle("calendar", card.title) +
           (evs.length ? evs.map((e) =>
             `<div class="a-slot${e.status === "cancelled" ? " cancelled" : ""}"><div><b>${fmtDT(e.start_at)}</b> ${esc(e.title)}${e.status === "cancelled" ? ' <span class="a-muted">(отменена)</span>' : ""}</div></div>`
           ).join("") : "<div class='a-muted'>Пусто</div>");
@@ -276,7 +267,7 @@
 
     // BUG-09: кнопки восстановленной истории знают актуальный статус действия.
     const ACTION_DONE_LABEL = {
-      confirmed: "✓ выполнено",
+      confirmed: "Выполнено",
       in_progress: "выполняется…",
       rejected: "отклонено",
       expired: "истекло",
@@ -315,7 +306,7 @@
           const res = await api("POST", url, {});
           container.querySelectorAll(".msg-actions button").forEach((x) => (x.disabled = true));
           if (a.type === "confirm") {
-            const payload = { reply: res.message || "Готово ✅", cards: res.created_event ? [{ kind: "created_event", title: "Встреча", data: res.created_event }] : [] };
+            const payload = { reply: res.message || "Готово", cards: res.created_event ? [{ kind: "created_event", title: "Встреча", data: res.created_event }] : [] };
             renderResult(payload);
             saveAssistantSnapshot(payload);
             toast(res.message || "Действие выполнено");
@@ -366,7 +357,7 @@
       (data.warnings || []).forEach((w) => {
         const wr = document.createElement("div");
         wr.className = "a-warn";
-        wr.textContent = "⚠️ " + w;
+        wr.innerHTML = icon("warning", "ic-14") + " " + esc(w);
         el.appendChild(wr);
       });
       (data.cards || []).forEach((c) => el.appendChild(renderCard(c)));
@@ -387,7 +378,7 @@
       if (historyCount) historyCount.textContent = chats.length ? `${chats.length}` : "";
       if (!chats.length) {
         historyList.innerHTML =
-          '<div class="chat-history-empty"><span class="ic">💬</span>' +
+          '<div class="chat-history-empty"><span class="a-empty-ic">' + icon("chat", "ic-24") + "</span>" +
           "Здесь появятся ваши чаты.<br>Начните новый разговор." +
           "</div>";
         return;
@@ -621,7 +612,7 @@
       uploadInput.addEventListener("change", async () => {
         const file = uploadInput.files[0];
         if (!file) return;
-        addUserMsg("📎 " + file.name);
+        addUserMsg(file.name);
         const typing = typingIndicator();
         const fd = new FormData();
         fd.append("file", file);
@@ -660,11 +651,6 @@
         shell.classList.toggle("chat-history-mobile-open");
       });
     }
-    if (sideToggle) {
-      sideToggle.addEventListener("click", () => {
-        applySideCollapsed(!shell.classList.contains("chat-side-collapsed"));
-      });
-    }
     document.addEventListener("click", (e) => {
       if (!chatMq.matches || !shell || !shell.classList.contains("chat-history-mobile-open")) return;
       const panel = document.getElementById("chat-history-panel");
@@ -673,7 +659,6 @@
     chatMq.addEventListener("change", () => closeHistoryMobile());
 
     applyHistoryCollapsed(localStorage.getItem(CHAT_HISTORY_COLLAPSED_KEY) === "1");
-    applySideCollapsed(localStorage.getItem(CHAT_SIDE_COLLAPSED_KEY) === "1");
     loadHistory(true);
     if (input && !isViewingForeignChat()) input.focus(); // UX-18
   }

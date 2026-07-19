@@ -1,18 +1,18 @@
 {% extends "base.html" %}
+{% import "_icons.html" as icons %}
 {% block title %}Календарь · {{ app_name }}{% endblock %}
 {% block page_title %}Календарь{% endblock %}
 {% block page_subtitle %}<span id="calendar-subtitle">{{ calendar_payload.label }}</span>{% endblock %}
 
 {% block topbar_actions %}
-<button class="btn ghost" id="find-slot-btn">🟢 Свободный слот</button>
-<button class="btn primary" data-new-event>＋ Встреча</button>
+<button class="btn ghost" id="find-slot-btn">{{ icons.icon("check-circle") }} Свободный слот</button>
+<button class="btn primary" data-new-event>{{ icons.icon("plus") }} Встреча</button>
 {% endblock %}
 
 {% block content %}
 {% if current_user.is_admin %}
 <section class="admin-calendar-switch glass panel" id="admin-calendar-switch">
   <div class="admin-calendar-current">
-    <span class="badge badge-admin">режим админа</span>
     <strong id="calendar-owner-label">
       {% if calendar_payload.owner.is_current_user %}
         Свой календарь
@@ -64,13 +64,6 @@
     <button type="button" class="btn small {{ 'primary' if calendar_payload.view == 'day' else 'ghost' }}" data-cal-view="day">День</button>
     <button type="button" class="btn small {{ 'primary' if calendar_payload.view == 'week' else 'ghost' }}" data-cal-view="week">Неделя</button>
     <button type="button" class="btn small {{ 'primary' if calendar_payload.view == 'month' else 'ghost' }}" data-cal-view="month">Месяц</button>
-  </div>
-
-  <div class="flex items-center gap-12 wrap">
-    <span class="badge badge-online">● Онлайн</span>
-    <span class="badge badge-offline">● Очно</span>
-    <span class="badge badge-hybrid">● Гибрид</span>
-    <span class="muted nowrap">Пояс: {{ calendar_payload.timezone }}</span>
   </div>
 </section>
 

@@ -1,11 +1,12 @@
 {% extends "base.html" %}
+{% import "_icons.html" as icons %}
 {% block title %}Настройки · {{ app_name }}{% endblock %}
 {% block page_title %}Настройки{% endblock %}
 {% block page_subtitle %}Параметры приложения{% endblock %}
 
 {% block content %}
 {% if saved %}
-<div class="alert info">✅ Настройки сохранены.</div>
+<div class="alert info flex items-center gap-8">{{ icons.icon("check-circle", "ic-18") }} Настройки сохранены.</div>
 {% endif %}
 {% if error %}
 <div class="alert error" role="alert">{{ error }}</div>

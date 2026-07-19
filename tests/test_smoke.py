@@ -221,7 +221,10 @@ def test_adaptive_chat_ui_hooks_render(client):
     assert 'id="sidebar-toggle"' in html
     assert 'id="assistant-shell"' in html
     assert 'id="chat-history-panel"' in html
-    assert 'id="chat-side-toggle"' in html
+    # Кнопка сворачивания меню живёт на самой боковой панели (не в шапке).
+    assert 'id="sidebar-collapse"' in html
+    # Панель «Примеры запросов» убрана — чат стал двухколоночным.
+    assert 'id="chat-side-toggle"' not in html
 
     # ARCH-05: app.js разбит на модули — core.js (общий слой) и chat.js.
     core_js = client.get("/static/js/core.js").text
@@ -229,8 +232,6 @@ def test_adaptive_chat_ui_hooks_render(client):
     css = client.get("/static/css/app.css").text
     assert "smartcal-sidebar-collapsed" in core_js
     assert "smartcal-chat-history-collapsed" in chat_js
-    assert "smartcal-chat-side-collapsed" in chat_js
-    assert ".chat-shell.chat-side-collapsed" in css
 
 
 def test_ui_redesign_markers(client):

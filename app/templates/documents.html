@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_icons.html" as icons %}
 {% block title %}Документы · {{ app_name }}{% endblock %}
 {% block page_title %}Документы и протоколы{% endblock %}
 {% block page_subtitle %}Загрузка PDF/DOCX/TXT · автоматический протокол встречи{% endblock %}
@@ -9,7 +10,7 @@
     <div class="panel-head"><h2>Загрузить документ</h2></div>
     <div class="dropzone" id="doc-dropzone">
       <input type="file" id="doc-file" accept=".txt,.md,.pdf,.docx" hidden />
-      <div class="dz-icon">📄</div>
+      <div class="dz-icon">{{ icons.icon("inbox") }}</div>
       <div class="dz-title">Перетащите файл сюда или нажмите</div>
       <div class="dz-hint muted">Поддерживаются PDF, DOCX, TXT, MD · до нескольких МБ</div>
     </div>
@@ -19,7 +20,7 @@
       {% if documents %}
         {% for d in documents %}
         <div class="event-row" data-doc-id="{{ d.id }}">
-          <div class="prio" style="background:var(--chip-bg); color:var(--accent-strong);">📄</div>
+          <div class="prio" style="background:var(--chip-bg); color:var(--accent-strong);">{{ icons.icon("file-text", "ic-18") }}</div>
           <div class="body">
             <div class="title">{{ d.filename }}</div>
             <div class="sub muted">
@@ -33,7 +34,7 @@
         {% endfor %}
       {% else %}
         <div class="empty-state" id="doc-empty">
-          <div class="big">🗂️</div>
+          <div class="empty-ic">{{ icons.icon("inbox") }}</div>
           Пока нет загруженных документов.<br />
           Загрузите протокол встречи — ассистент разберёт его на решения и задачи.
         </div>
@@ -44,7 +45,7 @@
   <section class="panel glass" id="protocol-panel">
     <div class="panel-head"><h2>Протокол встречи</h2></div>
     <div class="empty-state" id="protocol-empty">
-      <div class="big">📝</div>
+      <div class="empty-ic">{{ icons.icon("file-text") }}</div>
       Выберите документ и нажмите «Сформировать протокол».<br />
       Здесь появятся summary, решения, задачи, ответственные, сроки и follow-up встречи.
     </div>
